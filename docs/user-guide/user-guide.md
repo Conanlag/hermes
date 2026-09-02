@@ -1,17 +1,3 @@
-# PPL
-
-## Integrantes
-Alberto Leonel Mejía Hernández
-Alan Raul Arellano Gonzalez
-Arturo Daniel Agredano Gutierrez
-
-## Roles 
-
-
-## Estado Actual del proyecto 
-
-Actualmente estamos en los primeros pasos del proyecto.
-
 
 ## Requisitos
 
@@ -240,5 +226,3 @@ git pull origin main
 git merge <nombre-rama>
 git push origin main
 ```
-
-
