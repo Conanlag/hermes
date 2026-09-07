@@ -1,0 +1,26 @@
+# Compilacion
+/src/hermes/hermes
+
+# Object files
+*.o
+
+# Build directories
+bin/
+build/
+
+# Debug / compiled output
+*.out
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp

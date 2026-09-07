@@ -1,0 +1,82 @@
+name: Reporte de bug
+description: Reportar un comportamiento incorrecto del sistema
+title: "[BUG] "
+labels:
+  - bug
+
+body:
+  - type: input
+    id: requisitos
+    attributes:
+      label: Requisito relacionado
+      description: Indica el RF/RNF afectado, si aplica.
+      placeholder: "RF-10, RNF-27"
+
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción
+      description: Describe claramente el problema.
+      placeholder: |
+        El trabajo permanece en estado RUNNING
+        después de solicitar su cancelación.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducir
+    attributes:
+      label: Pasos para reproducir
+      description: Indica los pasos necesarios para reproducir el problema.
+      placeholder: |
+        1. Iniciar el servicio.
+        2. Ejecutar un trabajo.
+        3. Solicitar cancelación.
+        4. Consultar el estado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Comportamiento esperado
+      placeholder: |
+        El trabajo debe pasar a CANCELED.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento actual
+      placeholder: |
+        El trabajo permanece en RUNNING.
+    validations:
+      required: true
+
+  - type: textarea
+    id: entorno
+    attributes:
+      label: Entorno
+      placeholder: |
+        OS:
+        Versión:
+        Commit:
+        Configuración:
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs o evidencia
+      description: Agrega mensajes de error, logs o resultados relevantes.
+      render: shell
+
+  - type: textarea
+    id: solucion
+    attributes:
+      label: Posible solución
+      description: Si tienes una hipótesis sobre la causa o solución, descríbela aquí.
+      placeholder: |
+        Posible causa:
+        
+        Posible solución:

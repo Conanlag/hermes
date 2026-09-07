@@ -1,0 +1,94 @@
+name: Prueba y verificación
+description: Crear o ejecutar pruebas para verificar un requisito
+title: "[TEST] "
+labels:
+  - testing
+
+body:
+  - type: input
+    id: requisitos
+    attributes:
+      label: Requisitos a verificar
+      description: Indica los RF/RNF que serán verificados.
+      placeholder: "RNF-04, RNF-05"
+    validations:
+      required: true
+
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo de la prueba
+      description: Describe qué propiedad del sistema se quiere verificar.
+      placeholder: |
+        Verificar que el sistema respeta un máximo
+        de 3 trabajos simultáneos.
+    validations:
+      required: true
+
+  - type: textarea
+    id: entorno
+    attributes:
+      label: Entorno de prueba
+      description: Indica configuración, sistema operativo y condiciones relevantes.
+      placeholder: |
+        OS: Ubuntu 24.04
+        Concurrencia: 3
+        Trabajos: 10
+    validations:
+      required: true
+
+  - type: textarea
+    id: procedimiento
+    attributes:
+      label: Procedimiento
+      description: Describe paso a paso cómo ejecutar la prueba.
+      placeholder: |
+        1. Configurar concurrencia máxima en 3.
+        2. Iniciar el servicio.
+        3. Enviar 10 trabajos.
+        4. Consultar los estados.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Resultado esperado
+      description: Define exactamente qué debe ocurrir.
+      placeholder: |
+        Nunca deben existir más de 3 trabajos
+        en estado RUNNING simultáneamente.
+    validations:
+      required: true
+
+  - type: textarea
+    id: resultado
+    attributes:
+      label: Resultado obtenido
+      description: Registra el resultado real de la prueba.
+      placeholder: |
+        Pendiente de ejecución.
+
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia
+      description: Agrega logs, capturas, archivos de salida o resultados automatizados.
+      placeholder: |
+        Pendiente.
+
+  - type: checkboxes
+    id: verificacion
+    attributes:
+      label: Verificación
+      options:
+        - label: Caso de prueba implementado
+          required: true
+        - label: Prueba ejecutada
+          required: true
+        - label: Resultado PASS
+          required: true
+        - label: Evidencia registrada
+          required: true
+        - label: Matriz de trazabilidad actualizada
+          required: true

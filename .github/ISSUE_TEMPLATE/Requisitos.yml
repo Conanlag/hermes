@@ -1,0 +1,109 @@
+name: Implementación de requisito
+description: Implementar uno o varios requisitos funcionales o no funcionales
+title: "[RF/RNF] "
+labels:
+  - enhancement
+
+body:
+  - type: input
+    id: requisitos
+    attributes:
+      label: Requisitos relacionados
+      description: Indica los RF/RNF que cubre este Issue.
+      placeholder: "RF-01, RF-02, RNF-04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: Describe brevemente qué se debe implementar.
+      placeholder: |
+        Implementar la recepción de comandos y la creación
+        de un identificador único para cada trabajo.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alcance
+    attributes:
+      label: Alcance
+      description: Describe las tareas necesarias para completar la implementación.
+      placeholder: |
+        - Recibir comando y argumentos
+        - Validar la entrada
+        - Generar ID único
+        - Registrar el trabajo
+    validations:
+      required: true
+
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación
+      description: Condiciones que deben cumplirse para cerrar el Issue.
+      placeholder: |
+        - [ ] El sistema acepta comandos válidos.
+        - [ ] Rechaza comandos vacíos.
+        - [ ] Genera un ID único.
+        - [ ] Devuelve mensajes de error útiles.
+    validations:
+      required: true
+
+  - type: textarea
+    id: pruebas
+    attributes:
+      label: Pruebas
+      description: Describe el caso de prueba y el resultado esperado.
+      placeholder: |
+        Caso de prueba:
+        Enviar un comando válido.
+
+        Entrada:
+        task run "sleep 5"
+
+        Resultado esperado:
+        Se genera un ID y el trabajo queda en
+        estado QUEUED o RUNNING.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia
+      description: Agrega logs, capturas, resultados de pruebas o enlaces.
+      placeholder: |
+        Pendiente de implementación.
+
+  - type: textarea
+    id: riesgos
+    attributes:
+      label: Riesgos y decisiones técnicas
+      description: Documenta decisiones que puedan afectar seguridad, consistencia o recuperación.
+      placeholder: |
+        Riesgo:
+
+        Decisión:
+
+        Justificación:
+
+  - type: checkboxes
+    id: terminado
+    attributes:
+      label: Definición de terminado
+      description: Todas estas condiciones deben cumplirse antes de cerrar el Issue.
+      options:
+        - label: Implementación terminada
+          required: true
+        - label: Pruebas automatizadas creadas
+          required: true
+        - label: Pruebas ejecutadas
+          required: true
+        - label: Resultado PASS
+          required: true
+        - label: Evidencia registrada
+          required: true
+        - label: Matriz de trazabilidad actualizada
+          required: true
