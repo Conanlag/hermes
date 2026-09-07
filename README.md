@@ -38,3 +38,7 @@ Breve descripcion del estado actual:
 
 Cronograma:
 Se agruparon los requisitos funcionales en Hitos y fechas relacionadas por Avances del proyecto
+link: https://docs.google.com/spreadsheets/d/1jcUliCCX3MqiN43M72AIq6KcSGNUHMvCIZ9P0Xk2HeA/edit?usp=sharing
+
+Tablon de tareas: 
+https://github.com/users/Conanlag/projects/1
