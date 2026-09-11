@@ -1,7 +1,29 @@
 #include <iostream>
+#include <string>
 
-int main() {
-    std::cout << "HOLA ESTE ES EL INICIO DEL PROYECTO" << std::endl;
+using std::cout;
+using std::endl;
 
-    return 0;
+int proceso();
+int version();
+
+int main(int argc, char* argv[]) {
+
+    if (argc < 2) {
+        cout << "HOLA ESTE ES EL INICIO DEL PROYECTO" << endl;
+        return 0;
+    }
+
+    std::string comando = argv[1];
+
+    if (comando == "fork") {
+        return proceso();
+    }
+
+    if (comando == "--version") {
+        return version();
+    }
+
+    cout << "Comando no reconocido: " << comando << endl;
+    return 1;
 }

@@ -4,7 +4,8 @@ CXXFLAGS = -Wall -Wextra -std=c++17
 
 TARGET = hermes
 
-SRC = src/main.cpp
+SRC = $(shell find src -type f -name '*.cpp')
+
 
 INSTALL_DIR = $(HOME)/.local/bin
 
