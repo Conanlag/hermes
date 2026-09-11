@@ -1,0 +1,1 @@
+# Lista de errores y bugs encontrados
