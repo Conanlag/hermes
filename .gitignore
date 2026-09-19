@@ -1,6 +1,10 @@
 # Compilacion
 /src/hermes/hermes
 
+
+#datos
+/src/hermes/data/job_id
+
 # Object files
 *.o
 
