@@ -4,8 +4,6 @@
 using std::ifstream;
 using std::ofstream;
 
-
-
 Job crearJob(
     const string& programa,
     const vector<string>& argumentos
@@ -22,8 +20,6 @@ Job crearJob(
         archivoLectura >> siguienteId;
         archivoLectura.close();
     }
-
- 
 
     // Crear el job 
     Job job;
