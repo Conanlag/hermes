@@ -1,26 +1,26 @@
 #include <iostream>
 #include <string>
 
+// Librerias del proyecto
+#include "version/version.h"
+
 using std::cout;
 using std::endl;
 using std::string;
 
 
-int proceso();
-int version();
+
+
+
 
 int main(int argc, char* argv[]) {
 
     if (argc < 2) {
-        cout << "HOLA ESTE ES EL INICIO DEL PROYECTO" << endl;
+        cout << "HERMES " << endl;
         return 0;
     }
 
     string comando = argv[1];
-
-    if (comando == "fork") {
-        return proceso();
-    }
 
     if (comando == "--version") {
         return version();
