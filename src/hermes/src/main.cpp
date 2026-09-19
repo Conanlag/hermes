@@ -3,6 +3,8 @@
 
 using std::cout;
 using std::endl;
+using std::string;
+
 
 int proceso();
 int version();
@@ -14,7 +16,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    std::string comando = argv[1];
+    string comando = argv[1];
 
     if (comando == "fork") {
         return proceso();
