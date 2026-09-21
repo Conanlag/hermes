@@ -3,7 +3,7 @@
 ## 2. Al generar un Id por cada proceso en JSON 
 
 # Objetivo:
-
+Se genero un archivo que mantenia la persistencia de los Ids dentro del programa, en un archivo ```jobs_id``` sin embargo solo guardaba el contador, pensando mas a futuro, puedo considerar la persistencia en este momento y como guardar los datos de cada proceso en un Arreglo en JSON sin embargo no se como realizarlo y necesito una guia para instalar lo necesario.
 
 
 
@@ -397,4 +397,8 @@ g++ -Wall -Wextra -std=c++17 main.cpp job.cpp -o hermes
 
 no necesitas agregar `-ljson` ni nada parecido.
 
-```
+## Resultados
+Se pudo tener un resultado exitoso, sin embargo me toco investigar como hacerlo reproducible en cualquier computadora sin necesidad de sudo, la solucion fue tener instalada la libreria de manera local.
+
+## Aprendizaje 
+Me queda claro que la forma de implementar algo que yo conozco en otros programas, va a requerir que alguien mas haya programado la compatibilidad necesaria con c++, tambien me ayuda a conocer como se instalan las librerias externas de C++ que era algo que yo no sabia que se podia hacer hasta este momento. 

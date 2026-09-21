@@ -4,6 +4,7 @@
 
 #datos
 /src/hermes/data/job_id
+/src/hermes/data/jobs.json
 
 # Object files
 *.o
