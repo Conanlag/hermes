@@ -47,6 +47,8 @@ Job crearJob(
     job.job_id = siguienteId;
     job.programa = programa;
     job.argumentos = argumentos;
+    job.status = Status::QUEUED;    
+
 
     // Crear representación JSON del nuevo job
     json nuevoJob;
@@ -54,6 +56,7 @@ Job crearJob(
     nuevoJob["job_id"] = job.job_id;
     nuevoJob["programa"] = job.programa;
     nuevoJob["argumentos"] = job.argumentos;
+    nuevoJob["status"] = statusToString(job.status);
 
     // Agregarlo al arreglo
     jobs.push_back(nuevoJob);

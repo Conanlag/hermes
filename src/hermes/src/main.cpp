@@ -2,8 +2,8 @@
 #include <string>
 
 // Librerias del proyecto
-#include "version/version.h"
-#include "job/job.h"
+#include "version.h"
+#include "job.h"
 
 using std::cout;
 using std::endl;
