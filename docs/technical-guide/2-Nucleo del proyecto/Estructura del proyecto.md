@@ -5,7 +5,10 @@
 Actualmente, el núcleo de ejecución de Hermes está compuesto por los siguientes archivos:
 ```
 hermes/
-├── data/job_id
+├── data/jobs.json
+├── include/
+│   └── nlohmann/
+│         └──  json.hpp
 ├── src/
 │   ├── job/
 │   |   |── job.cpp
