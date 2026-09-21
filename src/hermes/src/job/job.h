@@ -8,7 +8,7 @@ using std::string;
 using std::vector;
 
 struct Job {
-    unsigned int id;
+    unsigned int job_id;
     string programa;
     vector<string> argumentos;
 };
