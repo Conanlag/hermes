@@ -44,17 +44,43 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    if (comando == "filter"){
-        if (argc < 4 ) { 
+    if (comando == "filter") {
+
+        if (argc < 4) {
             cout << "Uso: hermes filter <id|status> <valor>" << endl;
             return 1;
         }
+
         string tipoFiltro = argv[2];
+
+        if (tipoFiltro == "id") {
 
             unsigned int id = std::stoul(argv[3]);
 
             filtrarPorId(id);
+
+        } else if (tipoFiltro == "status") {
+
+            filtrarPorStatus(argv[3]);
+        
+            
+        } else if (tipoFiltro == "programa") {
+
+            filtrarPorPrograma(argv[3]);
+            
+        } else {
+
+            cout << "Filtro no reconocido: "
+                 << tipoFiltro << endl;
+
+            cout << "Filtros disponibles: id, status" << endl;
+
+            return 1;
+        }
+
+        return 0;
     }
+
 
     cout << "Comando no reconocido: " << comando << endl;
     return 1;

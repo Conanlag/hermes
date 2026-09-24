@@ -9,4 +9,7 @@ void filtrarPorId(unsigned int job_id);
 
 void filtrarPorStatus(const string& status);
 
+void filtrarPorPrograma(const string& programa);
+
+
 #endif
