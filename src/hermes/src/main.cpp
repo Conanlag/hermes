@@ -4,6 +4,7 @@
 // Librerias del proyecto
 #include "version.h"
 #include "job.h"
+#include "filter.h"
 
 using std::cout;
 using std::endl;
