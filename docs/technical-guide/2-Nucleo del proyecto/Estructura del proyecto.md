@@ -6,11 +6,14 @@ Actualmente, el núcleo de ejecución de Hermes está compuesto por los siguient
 ```
 hermes/
 ├── include/
+│   ├── filter.h
 │   ├── job.h
 │   ├── status.h
 │   └── version.h
 │
 ├── src/
+│   ├── filter/
+│   │ └── filter.cpp
 │   ├── job/
 │   │   └── job.cpp
 │   ├── status/
@@ -23,7 +26,7 @@ hermes/
 │   └── main.cpp
 │
 ├── data/
-│   └── .gitkeep
+│   └── jobs.json
 │
 ├── Makefile
 └── README.md

@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     if (comando == "filter") {
 
         if (argc < 4) {
-            cout << "Uso: hermes filter <id|status> <valor>" << endl;
+            cout << "Uso: hermes filter <id|status|programa> <valor>" << endl;
             return 1;
         }
 
@@ -67,13 +67,13 @@ int main(int argc, char* argv[]) {
         } else if (tipoFiltro == "programa") {
 
             filtrarPorPrograma(argv[3]);
-            
+
         } else {
 
             cout << "Filtro no reconocido: "
                  << tipoFiltro << endl;
 
-            cout << "Filtros disponibles: id, status" << endl;
+            cout << "Filtros disponibles: id, status, programa" << endl;
 
             return 1;
         }
