@@ -5,11 +5,13 @@
 #include "version.h"
 #include "job.h"
 #include "filter.h"
+#include "terminal.colors.h"
 
 using std::cout;
 using std::endl;
 using std::string;
 using std::vector;
+using std::cerr;
 
 // Funcion principal 
 int main(int argc, char* argv[]) {
@@ -27,7 +29,7 @@ int main(int argc, char* argv[]) {
 
     if (comando == "job") {
         if (argc < 3) {
-            cout << "Uso: hermes Job <programa> [argumentos..]" << endl;
+            info("Uso: hermes Job <programa> [argumentos..]");
             return 1;
         }
 
@@ -47,7 +49,7 @@ int main(int argc, char* argv[]) {
     if (comando == "filter") {
 
         if (argc < 4) {
-            cout << "Uso: hermes filter <id|status|programa> <valor>" << endl;
+            info("Uso: hermes Job <programa> [argumentos..]");
             return 1;
         }
 
@@ -70,10 +72,9 @@ int main(int argc, char* argv[]) {
 
         } else {
 
-            cout << "Filtro no reconocido: "
-                 << tipoFiltro << endl;
+            error("Filtro no reconocido: ", tipoFiltro);
 
-            cout << "Filtros disponibles: id, status, programa" << endl;
+            warning("Filtros disponibles: id, status, programa");
 
             return 1;
         }
@@ -82,6 +83,7 @@ int main(int argc, char* argv[]) {
     }
 
 
-    cout << "Comando no reconocido: " << comando << endl;
-    return 1;
+
+    error("Comando no reconocido: ", comando);
+    return 1; 
 }

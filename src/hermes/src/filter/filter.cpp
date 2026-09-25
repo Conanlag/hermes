@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include "terminal.colors.h"
 
 using std::ifstream;
 using std::cout;
@@ -20,7 +21,7 @@ void filtrarPorId(unsigned int job_id){
 
     //buscar archivo
     if(!archivoLectura.is_open()){
-        cout << "No se puede abrir" << archivoJobs << endl;
+        error("No se puede abrir: ", archivoJobs);
         return;
     }
 
@@ -28,7 +29,8 @@ void filtrarPorId(unsigned int job_id){
     try{
         archivoLectura >> jobs;
     } catch(const json::parse_error&) {
-        cout << "Error al leer" << archivoJobs << endl;
+        error("Error al leer: ", archivoJobs);
+
         archivoLectura.close();
         return;
     }
@@ -72,8 +74,7 @@ void filtrarPorId(unsigned int job_id){
         }
         
         if (!encontrado) {
-            cout << "No se encontró el Job ID: "
-                 << job_id << endl;
+            error("No se encontró el Job ID: ", job_id);
         }
 
 }
@@ -88,6 +89,7 @@ void filtrarPorStatus(const string& status){
     //buscar archivo 
     if (!archivoLectura.is_open()) {
         cout << "No se pudo abrir " << archivoJobs << endl;
+        error("No se puede abrir: ", archivoJobs);
         return;
     }
 
@@ -96,6 +98,8 @@ void filtrarPorStatus(const string& status){
         archivoLectura >> jobs;
     } catch (const json::parse_error&) {
         cout << "Error al leer " << archivoJobs << endl;
+        error("Error al leer: ", archivoJobs);
+
         archivoLectura.close();
         return;
     }
@@ -138,8 +142,7 @@ void filtrarPorStatus(const string& status){
     }
 
     if (!encontrado) {
-        cout << "No se encontraron Jobs con estado: "
-             << status << endl;
+        error("No se encontraron Jobs con estado: ", status);
     }
 
 }
@@ -154,7 +157,7 @@ void filtrarPorPrograma(const string& programa){
     
     //buscar archivo 
     if (!archivoLectura.is_open()) {
-        cout << "No se pudo abrir " << archivoJobs << endl;
+        error("No se pudo abrir", archivoJobs);
         return;
     }
 
@@ -162,7 +165,7 @@ void filtrarPorPrograma(const string& programa){
     try {
         archivoLectura >> jobs;
     } catch (const json::parse_error&) {
-        cout << "Error al leer " << archivoJobs << endl;
+        error("Error al leer: ", archivoJobs);
         archivoLectura.close();
         return;
     }
@@ -205,8 +208,7 @@ void filtrarPorPrograma(const string& programa){
     }
 
     if (!encontrado) {
-        cout << "No se encontraron Jobs con el programa indicado: "
-             << programa << endl;
+        error("No se encontraron Jobs con el programa indicado: ", programa);
     }
 
 }
