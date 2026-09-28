@@ -3,6 +3,8 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
+#include <ctime>
 #include "status.h"
 
 using std::string;
@@ -13,6 +15,9 @@ struct Job {
     string programa;
     vector<string> argumentos;
     Status status;
+    std::string tiempo_recepcion;
+    std::string tiempo_inicio;
+    std::string tiempo_terminacion;
 };
 
 Job crearJob(
