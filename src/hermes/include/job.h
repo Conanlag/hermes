@@ -9,7 +9,7 @@ using std::string;
 using std::vector;
 
 struct Job {
-    unsigned int job_id;
+    unsigned int job_id; // No puede haber jobs con id negativo
     string programa;
     vector<string> argumentos;
     Status status;

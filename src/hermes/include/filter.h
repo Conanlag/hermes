@@ -11,5 +11,4 @@ void filtrarPorStatus(const string& status);
 
 void filtrarPorPrograma(const string& programa);
 
-
 #endif
