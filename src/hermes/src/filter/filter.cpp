@@ -49,6 +49,9 @@ void filtrarPorId(unsigned int job_id){
                 cout << "Job ID: "
                      << job["job_id"] << endl;
 
+                cout << "PID: " 
+                     << job["pid"] << endl;
+
                 cout << "Programa: "
                      << job["programa"] << endl;
 
@@ -119,6 +122,9 @@ void filtrarPorStatus(const string& status){
 
             cout << "Programa: "
                  << job["programa"] << endl;
+            
+            cout << "PID: " 
+                 << job["pid"] << endl;
 
             cout << "Estado: "
                  << job["status"] << endl;
@@ -185,6 +191,9 @@ void filtrarPorPrograma(const string& programa){
 
             cout << "Programa: "
                  << job["programa"] << endl;
+            
+            cout << "PID: " 
+                 << job["pid"] << endl;
 
             cout << "Estado: "
                  << job["status"] << endl;

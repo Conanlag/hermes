@@ -1,4 +1,12 @@
-# HERMES
+<p align="center">
+    <img
+      src="Hermes.png"
+      alt="Hermes Logo"
+      width="200"
+    />
+</p>
+
+<h1 align="center">Hermes</h1>
 
 ## Proposito
 El cliente requiere una plataforma ligera para registrar, ejecutar, supervisar y controlar trabajos del sistema operativo en equipos Linux. El producto deberá demostrar programación de sistemas: procesos, señales, concurrencia, comunicación entre procesos, persistencia básica y comunicación en red.
