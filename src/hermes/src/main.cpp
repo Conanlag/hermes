@@ -57,6 +57,7 @@ int main(int argc, char* argv[]) {
         Job job = crearJob(programa, argumentos);
 
         cout << "job ID: " << job.job_id << endl;
+        cout << "PID: " << job.pid << endl;
         return 0;
     }
 

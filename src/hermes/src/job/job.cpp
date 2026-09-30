@@ -1,38 +1,46 @@
 #include "job.h"
+
 #include <fstream>
+#include <iostream>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <nlohmann/json.hpp>
 
 using std::ifstream;
 using std::ofstream;
+using std::cerr;
 using json = nlohmann::json;
 
 
 Job crearJob(
     const string& programa,
     const vector<string>& argumentos
-){
+) {
     // ### Generar un ID por cada job creado ###
 
-    const string archivoJobs = "data/jobs.json"; // Ruta donde se lee el json con datos de jobs
+    const string archivoJobs = "data/jobs.json";
 
-    json jobs = json::array(); // Creamos un arreglo json vacio en la RAM
+    json jobs = json::array();
 
-    // Leer el anterior ID Desde el archivo
-        ifstream archivoLectura(archivoJobs); // intenta abrir data/jobs.json para leerlo
+    // Leer los jobs existentes
+    ifstream archivoLectura(archivoJobs);
 
     if (archivoLectura.is_open()) {
         try {
-            archivoLectura >> jobs; // Leer el texto del archivo y lo inyecta en jobs
-        } catch (const json::parse_error&) { // Si falla porque el contenido es invalido, inicializalo vacio de nuevo
+            archivoLectura >> jobs;
+        } catch (const json::parse_error&) {
             jobs = json::array();
         }
+
         archivoLectura.close();
     }
 
     // ### Buscar el siguiente job_id ###
+
     unsigned int siguienteId = 1;
 
-        for (const auto& job : jobs) {
+    for (const auto& job : jobs) {
         if (job.contains("job_id") &&
             job["job_id"].is_number_unsigned()) {
 
@@ -44,30 +52,84 @@ Job crearJob(
         }
     }
 
-    // ### Crear el job ###
+    // ### Crear el proceso real ###
+
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        throw std::runtime_error("No se pudo crear el proceso");
+    }
+
+    // -------------------------------------------------
+    // PROCESO HIJO
+    // -------------------------------------------------
+
+    if (pid == 0) {
+
+        // Crear arreglo de argumentos para execvp()
+        vector<char*> argumentosExec;
+
+        argumentosExec.push_back(
+            const_cast<char*>(programa.c_str())
+        );
+
+        for (const auto& argumento : argumentos) {
+            argumentosExec.push_back(
+                const_cast<char*>(argumento.c_str())
+            );
+        }
+
+        // execvp necesita terminar el arreglo con nullptr
+        argumentosExec.push_back(nullptr);
+
+        // Ejecutar el programa real
+        execvp(
+            programa.c_str(),
+            argumentosExec.data()
+        );
+
+        // Si execvp regresa, significa que ocurrió un error
+        cerr << "Error: no se pudo ejecutar el programa: "
+             << programa
+             << std::endl;
+
+        _exit(127);
+    }
+
+    // -------------------------------------------------
+    // PROCESO PADRE
+    // -------------------------------------------------
+
     Job job;
+
     job.job_id = siguienteId;
+    job.pid = pid;
     job.programa = programa;
     job.argumentos = argumentos;
-    job.status = Status::QUEUED;    
+
+    // El proceso ya fue creado y está ejecutándose
+    job.status = Status::RUNNING;
 
 
-    // ### Crear representación JSON del nuevo job ###
+    // ### Crear representación JSON ###
+
     json nuevoJob;
 
     nuevoJob["job_id"] = job.job_id;
+    nuevoJob["pid"] = job.pid;
     nuevoJob["programa"] = job.programa;
     nuevoJob["argumentos"] = job.argumentos;
     nuevoJob["status"] = statusToString(job.status);
 
-    // Agregarlo al arreglo
     jobs.push_back(nuevoJob);
 
-    // ### Guardar el archivo JSON ###
-    ofstream archivoEscritura(archivoJobs); // Si no existe, lo crea
+
+    // ### Guardar jobs.json ###
+
+    ofstream archivoEscritura(archivoJobs);
 
     if (archivoEscritura.is_open()) {
-        archivoEscritura << jobs.dump(4); // Traducir la estructura json de la libreria a un string
+        archivoEscritura << jobs.dump(4);
         archivoEscritura.close();
     }
 
