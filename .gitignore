@@ -29,3 +29,9 @@ Thumbs.db
 # Logs and temporary files
 *.log
 *.tmp
+
+# Coding Agents
+AGENTS.MD
+AGENTS_INICIO_ESTUDIO.MD
+.atl
+TODO.md

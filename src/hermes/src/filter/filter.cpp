@@ -10,22 +10,21 @@ using std::cout;
 using std::endl;
 using json = nlohmann::json;
 
-const string archivoJobs = "data/jobs.json";
+const string archivoJobs = "data/jobs.json"; // Ruta donde se lee el json con datos de jobs
 
-
-//Filtro por Id
+// ### Filtro por Id ###
 void filtrarPorId(unsigned int job_id){
     json jobs = json::array();
 
     ifstream archivoLectura(archivoJobs);
 
-    //buscar archivo
+    // Intentar leer json de jobs
     if(!archivoLectura.is_open()){
         error("No se puede abrir: ", archivoJobs);
         return;
     }
 
-    //leer archivo
+    // Leer json
     try{
         archivoLectura >> jobs;
     } catch(const json::parse_error&) {
@@ -46,7 +45,7 @@ void filtrarPorId(unsigned int job_id){
             && job["job_id"] == job_id
             ) {
 
-                //Recuperar informacion del job
+                // Recuperar informacion del job
                 cout << "Job ID: "
                      << job["job_id"] << endl;
 
@@ -79,21 +78,21 @@ void filtrarPorId(unsigned int job_id){
 
 }
 
-//Filtro por Status
+// ### Filtro por Status ###
 
 void filtrarPorStatus(const string& status){
     json jobs = json::array();
     
     ifstream archivoLectura(archivoJobs);
     
-    //buscar archivo 
+    // Intentar leer json de jobs
     if (!archivoLectura.is_open()) {
         cout << "No se pudo abrir " << archivoJobs << endl;
         error("No se puede abrir: ", archivoJobs);
         return;
     }
 
-    //leer archivo
+    // Leer json
     try {
         archivoLectura >> jobs;
     } catch (const json::parse_error&) {
@@ -109,7 +108,7 @@ void filtrarPorStatus(const string& status){
     bool encontrado = false;
 
     for (const auto& job : jobs) {
-        //Recuperar informacion
+        // Recuperar informacion
 
         if (job.contains("status") &&
             job["status"].is_string() &&
@@ -147,7 +146,7 @@ void filtrarPorStatus(const string& status){
 
 }
 
-//Filtro por programa
+// ### Filtro por programa ###
 
 void filtrarPorPrograma(const string& programa){
 
@@ -155,13 +154,13 @@ void filtrarPorPrograma(const string& programa){
     
     ifstream archivoLectura(archivoJobs);
     
-    //buscar archivo 
+    // Intentar leer json de jobs
     if (!archivoLectura.is_open()) {
         error("No se pudo abrir", archivoJobs);
         return;
     }
 
-    //leer archivo
+    // Leer json
     try {
         archivoLectura >> jobs;
     } catch (const json::parse_error&) {
@@ -175,7 +174,7 @@ void filtrarPorPrograma(const string& programa){
     bool encontrado = false;
 
     for (const auto& job : jobs) {
-        //Recuperar informacion
+        // Recuperar informacion
 
         if (job.contains("programa") &&
             job["programa"].is_string() &&
