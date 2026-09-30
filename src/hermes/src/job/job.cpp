@@ -22,6 +22,14 @@ Job crearJob(
 
     const string archivoJobs = "data/jobs.json"; // Ruta donde se lee el json con datos de jobs
 
+    // Bloquear la escritura del archivo
+    // Espera si otro proceso está leyendo/escribiendo
+    int fd_candado = open("data/jobs.lock", O_CREAT | O_RDWR, 0666);
+    if (fd_candado != -1) {
+        flock(fd_candado, LOCK_EX);
+    }
+
+
     json jobs = json::array(); // Creamos un arreglo json vacio en la RAM
 
     // Leer el anterior ID Desde el archivo
@@ -84,6 +92,12 @@ Job crearJob(
     if (archivoEscritura.is_open()) {
         archivoEscritura << jobs.dump(4); // Traducir la estructura json de la libreria a un string
         archivoEscritura.close();
+    }
+    
+    // Liberar el bloqueo del archivo
+    if (fd_candado != -1) {
+        flock(fd_candado, LOCK_UN);
+        close(fd_candado);
     }
 
     return job;

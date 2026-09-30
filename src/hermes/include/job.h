@@ -5,6 +5,9 @@
 #include <vector>
 #include <chrono>
 #include <ctime>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
 #include "status.h"
 
 using std::string;
