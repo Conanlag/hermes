@@ -4,7 +4,7 @@
 #include <string>
 using std::string;
 
-enum class Status {
+enum class Status { // Crear categoria status con valores logicos de estados (estado 0, 1...)
       QUEUED,
       RUNNING,
       SUCCEEDED,
