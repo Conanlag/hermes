@@ -3,11 +3,7 @@
 
 #include <string>
 #include <vector>
-#include <chrono>
-#include <ctime>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <unistd.h>
+
 #include "status.h"
 
 using std::string;
@@ -24,10 +20,8 @@ struct Job {
     vector<string> argumentos;
 
     Status status;
+
     int codigoSalida;
-    std::string tiempo_recepcion;
-    std::string tiempo_inicio;
-    std::string tiempo_terminacion;
 };
 
 

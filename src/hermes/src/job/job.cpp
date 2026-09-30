@@ -22,13 +22,6 @@ using std::string;
 
 using json = nlohmann::json;
 
-std::string obtenerFechaHoraActual() {
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S");
-    return ss.str();
-}
 
 namespace {
 
@@ -573,12 +566,6 @@ Job crearJob(
         throw runtime_error(
             "No se pudo guardar jobs.json"
         );
-    }
-    
-    // Liberar el bloqueo del archivo
-    if (fd_candado != -1) {
-        flock(fd_candado, LOCK_UN);
-        close(fd_candado);
     }
 
 
