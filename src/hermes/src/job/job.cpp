@@ -1,10 +1,12 @@
 #include "job.h"
 
 #include "process.h"
+#include "terminal.colors.h"
 
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -16,6 +18,7 @@
 using std::ifstream;
 using std::ofstream;
 using std::runtime_error;
+using std::string;
 
 using json = nlohmann::json;
 
@@ -32,6 +35,7 @@ json leerJobs() {
     ifstream archivo(archivoJobs);
 
     if (!archivo.is_open()) {
+
         return jobs;
     }
 
@@ -40,6 +44,7 @@ json leerJobs() {
         archivo >> jobs;
 
         if (!jobs.is_array()) {
+
             jobs = json::array();
         }
 
@@ -52,11 +57,14 @@ json leerJobs() {
 }
 
 
-bool guardarJobs(const json& jobs) {
+bool guardarJobs(
+    const json& jobs
+) {
 
     ofstream archivo(archivoJobs);
 
     if (!archivo.is_open()) {
+
         return false;
     }
 
@@ -67,13 +75,16 @@ bool guardarJobs(const json& jobs) {
 
 
 /*
- * Ejecuta una función mientras mantiene bloqueado jobs.json.
+ * Ejecuta una función mientras mantiene bloqueado
+ * jobs.json.
  *
  * Esto evita que dos procesos supervisores modifiquen
  * simultáneamente el archivo y se pisen los cambios.
  */
 template <typename Funcion>
-bool modificarJobs(Funcion funcion) {
+bool modificarJobs(
+    Funcion funcion
+) {
 
     int descriptor = open(
         archivoJobs.c_str(),
@@ -82,38 +93,58 @@ bool modificarJobs(Funcion funcion) {
     );
 
     if (descriptor == -1) {
+
         return false;
     }
 
-    if (flock(descriptor, LOCK_EX) == -1) {
+
+    if (flock(
+        descriptor,
+        LOCK_EX
+    ) == -1) {
 
         close(descriptor);
 
         return false;
     }
 
+
     json jobs = leerJobs();
 
-    bool resultado = funcion(jobs);
+    bool resultado =
+        funcion(jobs);
+
 
     if (resultado) {
 
-        ofstream archivo(archivoJobs);
+        ofstream archivo(
+            archivoJobs
+        );
 
         if (!archivo.is_open()) {
 
-            flock(descriptor, LOCK_UN);
+            flock(
+                descriptor,
+                LOCK_UN
+            );
+
             close(descriptor);
 
             return false;
         }
 
+
         archivo << jobs.dump(4);
 
-        resultado = archivo.good();
+        resultado =
+            archivo.good();
     }
 
-    flock(descriptor, LOCK_UN);
+
+    flock(
+        descriptor,
+        LOCK_UN
+    );
 
     close(descriptor);
 
@@ -121,7 +152,9 @@ bool modificarJobs(Funcion funcion) {
 }
 
 
-unsigned int obtenerSiguienteId(const json& jobs) {
+unsigned int obtenerSiguienteId(
+    const json& jobs
+) {
 
     unsigned int siguienteId = 1;
 
@@ -132,15 +165,123 @@ unsigned int obtenerSiguienteId(const json& jobs) {
             job["job_id"].is_number_unsigned()
         ) {
 
-            unsigned int id = job["job_id"];
+            unsigned int id =
+                job["job_id"];
 
             if (id >= siguienteId) {
-                siguienteId = id + 1;
+
+                siguienteId =
+                    id + 1;
             }
         }
     }
 
     return siguienteId;
+}
+
+
+/*
+ * Lee el stderr del proceso y lo muestra
+ * mediante terminal.colors.h.
+ *
+ * Cada línea recibida se envía mediante error(),
+ * por lo que aparece en rojo.
+ */
+void leerStderrProceso(
+    int pipeStderr
+) {
+
+    const size_t TAMANO_BUFFER = 256;
+
+    char buffer[TAMANO_BUFFER];
+
+    string linea;
+
+
+    while (true) {
+
+        ssize_t bytesLeidos =
+            read(
+                pipeStderr,
+                buffer,
+                TAMANO_BUFFER - 1
+            );
+
+
+        /*
+         * El proceso cerró el pipe.
+         */
+        if (bytesLeidos == 0) {
+
+            break;
+        }
+
+
+        /*
+         * Error de lectura.
+         */
+        if (bytesLeidos < 0) {
+
+            if (errno == EINTR) {
+
+                continue;
+            }
+
+            break;
+        }
+
+
+        buffer[bytesLeidos] = '\0';
+
+        linea += buffer;
+
+
+        /*
+         * Procesar todas las líneas completas
+         * que hayan llegado.
+         */
+        size_t posicion;
+
+        while (
+            (posicion = linea.find('\n'))
+            != string::npos
+        ) {
+
+            string mensaje =
+                linea.substr(
+                    0,
+                    posicion
+                );
+
+
+            /*
+             * Evitar imprimir una línea vacía
+             * como un error.
+             */
+            if (!mensaje.empty()) {
+
+                error(mensaje);
+            }
+
+
+            linea.erase(
+                0,
+                posicion + 1
+            );
+        }
+    }
+
+
+    /*
+     * Puede quedar texto sin '\n' al final.
+     */
+    if (!linea.empty()) {
+
+        error(linea);
+    }
+
+
+    close(pipeStderr);
 }
 
 
@@ -154,17 +295,25 @@ void supervisarJob(
     int pipeEscritura
 ) {
 
+    int pipeStderr = -1;
+
+
     try {
 
         /*
-         * El Job inicialmente está QUEUED.
+         * -------------------------------------------------
+         * Crear el proceso real
+         * -------------------------------------------------
          *
-         * Ahora se crea el proceso real.
+         * process.cpp crea también un pipe para capturar
+         * el stderr del proceso.
          */
         pid_t pid = iniciarProceso(
             programa,
-            argumentos
+            argumentos,
+            pipeStderr
         );
+
 
         /*
          * Mandamos el PID al proceso padre de Hermes.
@@ -188,14 +337,35 @@ void supervisarJob(
 
 
         /*
-         * Esperamos al proceso real.
+         * -------------------------------------------------
+         * Leer stderr
+         * -------------------------------------------------
+         *
+         * Es importante hacer esto antes de waitpid().
+         *
+         * Si el programa escribe mucho en stderr,
+         * el pipe podría llenarse y bloquear al proceso.
+         */
+        leerStderrProceso(
+            pipeStderr
+        );
+
+        pipeStderr = -1;
+
+
+        /*
+         * -------------------------------------------------
+         * Esperar al proceso real
+         * -------------------------------------------------
          */
         int codigoSalida = 0;
 
-        bool procesoTermino = esperarProceso(
-            pid,
-            codigoSalida
-        );
+        bool procesoTermino =
+            esperarProceso(
+                pid,
+                codigoSalida
+            );
+
 
         if (!procesoTermino) {
 
@@ -214,7 +384,9 @@ void supervisarJob(
          */
         json jobs = leerJobs();
 
-        bool cancelacionSolicitada = false;
+        bool cancelacionSolicitada =
+            false;
+
 
         for (const auto& job : jobs) {
 
@@ -224,8 +396,11 @@ void supervisarJob(
             ) {
 
                 if (
-                    job.contains("cancel_requested") &&
-                    job["cancel_requested"].is_boolean()
+                    job.contains(
+                        "cancel_requested"
+                    ) &&
+                    job["cancel_requested"]
+                        .is_boolean()
                 ) {
 
                     cancelacionSolicitada =
@@ -264,7 +439,18 @@ void supervisarJob(
 
     } catch (...) {
 
+        /*
+         * Cerrar pipe de stderr si todavía
+         * permanece abierto.
+         */
+        if (pipeStderr != -1) {
+
+            close(pipeStderr);
+        }
+
+
         close(pipeEscritura);
+
 
         actualizarResultadoJob(
             jobId,
@@ -274,6 +460,7 @@ void supervisarJob(
 
         _exit(1);
     }
+
 
     _exit(0);
 }
@@ -313,23 +500,28 @@ Job crearJob(
 
     Job job;
 
-    job.job_id = siguienteId;
+    job.job_id =
+        siguienteId;
 
     /*
      * PID todavía no existe.
      */
     job.pid = 0;
 
-    job.programa = programa;
+    job.programa =
+        programa;
 
-    job.argumentos = argumentos;
+    job.argumentos =
+        argumentos;
 
     /*
      * El Job nace en QUEUED.
      */
-    job.status = Status::QUEUED;
+    job.status =
+        Status::QUEUED;
 
-    job.codigoSalida = -1;
+    job.codigoSalida =
+        -1;
 
 
     /*
@@ -353,7 +545,9 @@ Job crearJob(
         job.argumentos;
 
     nuevoJob["status"] =
-        statusToString(job.status);
+        statusToString(
+            job.status
+        );
 
     nuevoJob["codigo_salida"] =
         job.codigoSalida;
@@ -362,7 +556,9 @@ Job crearJob(
         false;
 
 
-    jobs.push_back(nuevoJob);
+    jobs.push_back(
+        nuevoJob
+    );
 
 
     if (!guardarJobs(jobs)) {
@@ -397,7 +593,9 @@ Job crearJob(
      * ---------------------------------------------
      */
 
-    pid_t supervisor = fork();
+    pid_t supervisor =
+        fork();
+
 
     if (supervisor < 0) {
 
@@ -419,6 +617,7 @@ Job crearJob(
     if (supervisor == 0) {
 
         close(pipefd[0]);
+
 
         supervisarJob(
             job.job_id,
@@ -443,11 +642,12 @@ Job crearJob(
      */
     pid_t pidReal = 0;
 
-    ssize_t bytesLeidos = read(
-        pipefd[0],
-        &pidReal,
-        sizeof(pidReal)
-    );
+    ssize_t bytesLeidos =
+        read(
+            pipefd[0],
+            &pidReal,
+            sizeof(pidReal)
+        );
 
     close(pipefd[0]);
 
@@ -466,7 +666,8 @@ Job crearJob(
     /*
      * Actualizamos el PID que verá el usuario.
      */
-    job.pid = pidReal;
+    job.pid =
+        pidReal;
 
 
     /*
@@ -481,15 +682,21 @@ Job crearJob(
     modificarJobs(
         [&](json& jobsActualizados) {
 
-            for (auto& item : jobsActualizados) {
+            for (
+                auto& item :
+                jobsActualizados
+            ) {
 
                 if (
                     item.contains("job_id") &&
-                    item["job_id"] == job.job_id
+                    item["job_id"] ==
+                        job.job_id
                 ) {
 
                     item["pid"] =
-                        static_cast<int>(pidReal);
+                        static_cast<int>(
+                            pidReal
+                        );
 
                     return true;
                 }
@@ -512,7 +719,10 @@ bool actualizarEstadoJob(
     return modificarJobs(
         [&](json& jobs) {
 
-            for (auto& job : jobs) {
+            for (
+                auto& job :
+                jobs
+            ) {
 
                 if (
                     job.contains("job_id") &&
@@ -520,7 +730,9 @@ bool actualizarEstadoJob(
                 ) {
 
                     job["status"] =
-                        statusToString(nuevoEstado);
+                        statusToString(
+                            nuevoEstado
+                        );
 
                     return true;
                 }
@@ -541,7 +753,10 @@ bool actualizarResultadoJob(
     return modificarJobs(
         [&](json& jobs) {
 
-            for (auto& job : jobs) {
+            for (
+                auto& job :
+                jobs
+            ) {
 
                 if (
                     job.contains("job_id") &&
@@ -549,7 +764,9 @@ bool actualizarResultadoJob(
                 ) {
 
                     job["status"] =
-                        statusToString(nuevoEstado);
+                        statusToString(
+                            nuevoEstado
+                        );
 
                     job["codigo_salida"] =
                         codigoSalida;
@@ -571,7 +788,10 @@ bool marcarCancelacionSolicitada(
     return modificarJobs(
         [&](json& jobs) {
 
-            for (auto& job : jobs) {
+            for (
+                auto& job :
+                jobs
+            ) {
 
                 if (
                     job.contains("job_id") &&
@@ -586,10 +806,12 @@ bool marcarCancelacionSolicitada(
                         !job.contains("status") ||
                         job["status"] != "RUNNING"
                     ) {
+
                         return false;
                     }
 
-                    job["cancel_requested"] = true;
+                    job["cancel_requested"] =
+                        true;
 
                     return true;
                 }
