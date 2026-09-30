@@ -7,6 +7,8 @@
 #include "filter.h"
 #include "validator.h"
 #include "terminal.colors.h"
+#include "cancel.h"
+
 
 using std::cout;
 using std::endl;
@@ -60,6 +62,43 @@ int main(int argc, char* argv[]) {
         cout << "PID: " << job.pid << endl;
         return 0;
     }
+    if (comando == "cancel") {
+
+    if (argc < 3) {
+        info("Uso: hermes cancel <id>");
+        return 1;
+    }
+
+    ResultadoValidacion ri =
+        validarIdTexto(argv[2]);
+
+    if (!ri.esValido) {
+        error(ri.mensaje);
+        return 1;
+    }
+
+    unsigned int id =
+        static_cast<unsigned int>(
+            std::stoul(argv[2])
+        );
+
+    if (!cancelarJob(id)) {
+
+        error(
+            "No se pudo cancelar el Job: ",
+            id
+        );
+
+        return 1;
+    }
+
+    info(
+        "Cancelación solicitada para el Job: ",
+        id
+    );
+
+    return 0;
+}
 
     if (comando == "filter") {
         if (argc < 4) {
