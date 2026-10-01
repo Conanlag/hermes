@@ -2,6 +2,7 @@
 
 #include "process.h"
 #include "terminal.colors.h"
+#include "../utils/timestamp.h"
 
 #include <fstream>
 #include <iostream>
@@ -26,6 +27,7 @@ using json = nlohmann::json;
 namespace {
 
 const string archivoJobs = "data/jobs.json";
+const string archivoConfiguracion = "data/config.json";
 
 
 json leerJobs() {
@@ -54,6 +56,39 @@ json leerJobs() {
     }
 
     return jobs;
+}
+
+
+unsigned int obtenerTrabajosMaximos() {
+
+    constexpr unsigned int valorPredeterminado = 5;
+
+    ifstream archivo(archivoConfiguracion);
+
+    if (!archivo.is_open()) {
+
+        return valorPredeterminado;
+    }
+
+    try {
+
+        json configuracion;
+
+        archivo >> configuracion;
+
+        if (
+            configuracion.contains("trabajos_maximos") &&
+            configuracion["trabajos_maximos"].is_number_unsigned() &&
+            configuracion["trabajos_maximos"] > 0
+        ) {
+
+            return configuracion["trabajos_maximos"];
+        }
+
+    } catch (const json::parse_error&) {
+    }
+
+    return valorPredeterminado;
 }
 
 
@@ -491,6 +526,21 @@ Job crearJob(
     unsigned int siguienteId =
         obtenerSiguienteId(jobs);
 
+    unsigned int trabajosRunning = 0;
+
+    for (const auto& jobExistente : jobs) {
+
+        if (
+            jobExistente.contains("status") &&
+            jobExistente["status"] == "RUNNING"
+        ) {
+
+            ++trabajosRunning;
+        }
+    }
+
+    unsigned int trabajosMaximos =
+        obtenerTrabajosMaximos();
 
     /*
      * ---------------------------------------------
@@ -515,10 +565,20 @@ Job crearJob(
         argumentos;
 
     /*
-     * El Job nace en QUEUED.
+     * El Job nace en QUEUED o RUNNING.
      */
     job.status =
-        Status::QUEUED;
+        trabajosRunning < trabajosMaximos
+            ? Status::RUNNING
+            : Status::QUEUED;
+
+    job.tiempo_recepcion =
+        obtenerFechaHoraActual();
+
+    job.tiempo_inicio =
+        job.status == Status::RUNNING
+            ? job.tiempo_recepcion
+            : "";
 
     job.codigoSalida =
         -1;
@@ -526,7 +586,7 @@ Job crearJob(
 
     /*
      * ---------------------------------------------
-     * 4. Guardar QUEUED
+     * 4. Guardar QUEUED o RUNNING
      * ---------------------------------------------
      */
 
@@ -548,6 +608,15 @@ Job crearJob(
         statusToString(
             job.status
         );
+
+    nuevoJob["tiempo_recepcion"] =
+        job.tiempo_recepcion;
+
+    if (job.status == Status::RUNNING) {
+
+        nuevoJob["tiempo_inicio"] =
+            job.tiempo_inicio;
+    }
 
     nuevoJob["codigo_salida"] =
         job.codigoSalida;
@@ -706,7 +775,7 @@ Job crearJob(
         }
     );
 
-
+    
     return job;
 }
 
@@ -770,6 +839,9 @@ bool actualizarResultadoJob(
 
                     job["codigo_salida"] =
                         codigoSalida;
+
+                    job["tiempo_terminacion"] =
+                        obtenerFechaHoraActual();
 
                     return true;
                 }
