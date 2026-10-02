@@ -2,7 +2,7 @@
 
 #include "process.h"
 #include "terminal.colors.h"
-#include "../utils/timestamp.h"
+#include "timestamp.h"
 
 #include <fstream>
 #include <iostream>
@@ -184,6 +184,186 @@ bool modificarJobs(
     close(descriptor);
 
     return resultado;
+}
+
+
+void supervisarJob(
+    unsigned int jobId,
+    const string& programa,
+    const vector<string>& argumentos,
+    int pipeEscritura
+);
+
+
+bool ejecutarJobsEnCola() {
+
+    bool seLanzóAlgúnTrabajo = false;
+
+    while (true) {
+
+        json jobs = leerJobs();
+
+        unsigned int trabajosRunning = 0;
+
+        for (const auto& job : jobs) {
+
+            if (
+                job.contains("status") &&
+                job["status"] == "RUNNING"
+            ) {
+
+                ++trabajosRunning;
+            }
+        }
+
+        unsigned int trabajosMaximos =
+            obtenerTrabajosMaximos();
+
+        if (trabajosRunning >= trabajosMaximos) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        unsigned int jobIdCola = 0;
+        string programaCola;
+        vector<string> argumentosCola;
+        bool encontrado = false;
+
+        for (const auto& job : jobs) {
+
+            if (
+                !job.contains("status") ||
+                job["status"] != "QUEUED"
+            ) {
+
+                continue;
+            }
+
+            if (
+                !job.contains("job_id") ||
+                !job["job_id"].is_number_unsigned()
+            ) {
+
+                continue;
+            }
+
+            if (
+                !job.contains("programa") ||
+                !job["programa"].is_string()
+            ) {
+
+                continue;
+            }
+
+            if (
+                !job.contains("argumentos") ||
+                !job["argumentos"].is_array()
+            ) {
+
+                continue;
+            }
+
+            jobIdCola = job["job_id"];
+            programaCola = job["programa"];
+            argumentosCola.clear();
+
+            for (const auto& argumento : job["argumentos"]) {
+
+                if (argumento.is_string()) {
+
+                    argumentosCola.push_back(
+                        argumento.get<string>()
+                    );
+                }
+            }
+
+            encontrado = true;
+            break;
+        }
+
+        if (!encontrado) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        int pipefd[2];
+
+        if (pipe(pipefd) == -1) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        pid_t supervisor = fork();
+
+        if (supervisor < 0) {
+
+            close(pipefd[0]);
+            close(pipefd[1]);
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        if (supervisor == 0) {
+
+            close(pipefd[0]);
+
+            supervisarJob(
+                jobIdCola,
+                programaCola,
+                argumentosCola,
+                pipefd[1]
+            );
+        }
+
+        close(pipefd[1]);
+
+        pid_t pidReal = 0;
+
+        ssize_t bytesLeidos =
+            read(
+                pipefd[0],
+                &pidReal,
+                sizeof(pidReal)
+            );
+
+        close(pipefd[0]);
+
+        if (
+            bytesLeidos != sizeof(pidReal) ||
+            pidReal <= 0
+        ) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        bool pidActualizado = modificarJobs(
+            [&](json& jobsActualizados) {
+
+                for (auto& item : jobsActualizados) {
+
+                    if (
+                        item.contains("job_id") &&
+                        item["job_id"] == jobIdCola
+                    ) {
+
+                        item["pid"] =
+                            static_cast<int>(pidReal);
+
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        );
+
+        if (!pidActualizado) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        seLanzóAlgúnTrabajo = true;
+    }
 }
 
 
@@ -638,6 +818,12 @@ Job crearJob(
     }
 
 
+    if (job.status == Status::QUEUED) {
+
+        return job;
+    }
+
+
     /*
      * ---------------------------------------------
      * 5. Crear pipe
@@ -819,7 +1005,7 @@ bool actualizarResultadoJob(
     int codigoSalida
 ) {
 
-    return modificarJobs(
+    bool actualizado = modificarJobs(
         [&](json& jobs) {
 
             for (
@@ -850,6 +1036,13 @@ bool actualizarResultadoJob(
             return false;
         }
     );
+
+    if (actualizado) {
+
+        ejecutarJobsEnCola();
+    }
+
+    return actualizado;
 }
 
 
