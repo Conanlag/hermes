@@ -14,4 +14,6 @@ enum class Status { // Crear categoria status con valores logicos de estados (es
 
 
 string statusToString(Status status);
+
+Status statusDesdeTexto(const string& texto);
 #endif

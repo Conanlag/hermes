@@ -1,4 +1,6 @@
 #include "filter.h"
+#include "job.h"
+#include "status.h"
 
 #include <fstream>
 #include <iostream>
@@ -14,71 +16,36 @@ const string archivoJobs = "data/jobs.json"; // Ruta donde se lee el json con da
 
 // ### Filtro por Id ###
 void filtrarPorId(unsigned int job_id){
-    json jobs = json::array();
+    // Separación de responsabilidades: job provee el dato, filter presenta.
+    Job job;
 
-    ifstream archivoLectura(archivoJobs);
-
-    // Intentar leer json de jobs
-    if(!archivoLectura.is_open()){
-        error("No se puede abrir: ", archivoJobs);
+    if (!obtenerJobPorId(job_id, job)) {
+        error("No se encontró el Job ID: ", job_id);
         return;
     }
 
-    // Leer json
-    try{
-        archivoLectura >> jobs;
-    } catch(const json::parse_error&) {
-        error("Error al leer: ", archivoJobs);
+    cout << "Job ID: "
+         << job.job_id << endl;
 
-        archivoLectura.close();
-        return;
+    cout << "PID: "
+         << job.pid << endl;
+
+    cout << "Programa: "
+         << job.programa << endl;
+
+    cout << "Estado: "
+         << statusToString(job.status) << endl;
+
+    cout << "Codigo de salida: "
+         << job.codigoSalida << endl;
+
+    cout << "Argumentos: ";
+
+    for (const auto& argumento : job.argumentos) {
+        cout << argumento << " ";
     }
-    archivoLectura.close();
 
-    bool encontrado = false; 
-
-    for (const auto& job : jobs){
-
-        if (
-            job.contains("job_id") 
-            && job["job_id"].is_number_unsigned()
-            && job["job_id"] == job_id
-            ) {
-
-                // Recuperar informacion del job
-                cout << "Job ID: "
-                     << job["job_id"] << endl;
-
-                cout << "PID: " 
-                     << job["pid"] << endl;
-
-                cout << "Programa: "
-                     << job["programa"] << endl;
-
-                cout << "Estado: "
-                     << job["status"] << endl;
-
-                cout << "Argumentos: ";
-
-                if (job.contains("argumentos") &&
-                    job["argumentos"].is_array()
-                ) {
-                    for(const auto& argumento : job["argumentos"]){
-                        cout << argumento << " ";
-                    }
-                }
-                    cout << endl;
-
-                    encontrado = true; 
-                    break;
-
-            }
-        }
-        
-        if (!encontrado) {
-            error("No se encontró el Job ID: ", job_id);
-        }
-
+    cout << endl;
 }
 
 // ### Filtro por Status ###
@@ -117,17 +84,37 @@ void filtrarPorStatus(const string& status){
             job["status"].is_string() &&
             job["status"] == status) {
 
-            cout << "Job ID: "
-                 << job["job_id"] << endl;
+            cout << "Job ID: ";
+            if (job.contains("job_id")) {
+                cout << job["job_id"];
+            } else {
+                cout << "N/A";
+            }
+            cout << endl;
 
-            cout << "Programa: "
-                 << job["programa"] << endl;
-            
-            cout << "PID: " 
-                 << job["pid"] << endl;
+            cout << "Programa: ";
+            if (job.contains("programa")) {
+                cout << job["programa"];
+            } else {
+                cout << "N/A";
+            }
+            cout << endl;
 
-            cout << "Estado: "
-                 << job["status"] << endl;
+            cout << "PID: ";
+            if (job.contains("pid")) {
+                cout << job["pid"];
+            } else {
+                cout << 0;
+            }
+            cout << endl;
+
+            cout << "Estado: ";
+            if (job.contains("status")) {
+                cout << job["status"];
+            } else {
+                cout << "QUEUED";
+            }
+            cout << endl;
 
             cout << "Argumentos: ";
 
@@ -186,17 +173,37 @@ void filtrarPorPrograma(const string& programa){
             job["programa"].is_string() &&
             job["programa"] == programa) {
 
-            cout << "Job ID: "
-                 << job["job_id"] << endl;
+            cout << "Job ID: ";
+            if (job.contains("job_id")) {
+                cout << job["job_id"];
+            } else {
+                cout << "N/A";
+            }
+            cout << endl;
 
-            cout << "Programa: "
-                 << job["programa"] << endl;
-            
-            cout << "PID: " 
-                 << job["pid"] << endl;
+            cout << "Programa: ";
+            if (job.contains("programa")) {
+                cout << job["programa"];
+            } else {
+                cout << "N/A";
+            }
+            cout << endl;
 
-            cout << "Estado: "
-                 << job["status"] << endl;
+            cout << "PID: ";
+            if (job.contains("pid")) {
+                cout << job["pid"];
+            } else {
+                cout << 0;
+            }
+            cout << endl;
+
+            cout << "Estado: ";
+            if (job.contains("status")) {
+                cout << job["status"];
+            } else {
+                cout << "QUEUED";
+            }
+            cout << endl;
 
             cout << "Argumentos: ";
 
