@@ -48,4 +48,10 @@ bool marcarCancelacionSolicitada(
     unsigned int jobId
 );
 
+
+bool obtenerJobPorId(
+    unsigned int jobId,
+    Job& jobOut
+);
+
 #endif

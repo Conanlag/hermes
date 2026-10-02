@@ -821,3 +821,90 @@ bool marcarCancelacionSolicitada(
         }
     );
 }
+
+
+bool obtenerJobPorId(
+    unsigned int jobId,
+    Job& jobOut
+) {
+
+    json jobs = leerJobs();
+
+    for (const auto& item : jobs) {
+
+        if (
+            !item.contains("job_id") ||
+            !item["job_id"].is_number_unsigned() ||
+            item["job_id"] != jobId
+        ) {
+            continue;
+        }
+
+        jobOut.job_id = jobId;
+
+        if (
+            item.contains("pid") &&
+            (
+                item["pid"].is_number_integer() ||
+                item["pid"].is_number_unsigned()
+            )
+        ) {
+            jobOut.pid =
+                static_cast<int>(item["pid"]);
+        } else {
+            jobOut.pid = 0;
+        }
+
+        if (
+            item.contains("programa") &&
+            item["programa"].is_string()
+        ) {
+            jobOut.programa =
+                item["programa"];
+        } else {
+            jobOut.programa = "";
+        }
+
+        jobOut.argumentos.clear();
+
+        if (
+            item.contains("argumentos") &&
+            item["argumentos"].is_array()
+        ) {
+            for (const auto& argumento : item["argumentos"]) {
+                if (argumento.is_string()) {
+                    jobOut.argumentos.push_back(argumento);
+                }
+            }
+        }
+
+        if (
+            item.contains("status") &&
+            item["status"].is_string()
+        ) {
+            string textoEstado = item["status"];
+
+            jobOut.status =
+                statusDesdeTexto(textoEstado);
+        } else {
+            jobOut.status = Status::QUEUED;
+        }
+
+        if (
+            item.contains("codigo_salida") &&
+            (
+                item["codigo_salida"].is_number_integer() ||
+                item["codigo_salida"].is_number_unsigned()
+            )
+        ) {
+            jobOut.codigoSalida =
+                static_cast<int>(item["codigo_salida"]);
+        } else {
+            jobOut.codigoSalida = -1;
+        }
+
+        return true;
+    }
+
+    return false;
+}

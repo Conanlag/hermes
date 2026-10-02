@@ -22,3 +22,28 @@ string statusToString(Status status) {
 
     return "QUEUED";
 }
+
+Status statusDesdeTexto(const string& texto) {
+
+    if (texto == "QUEUED") {
+        return Status::QUEUED;
+    }
+
+    if (texto == "RUNNING") {
+        return Status::RUNNING;
+    }
+
+    if (texto == "SUCCEEDED") {
+        return Status::SUCCEEDED;
+    }
+
+    if (texto == "FAILED") {
+        return Status::FAILED;
+    }
+
+    if (texto == "CANCELED") {
+        return Status::CANCELED;
+    }
+
+    return Status::QUEUED;
+}
