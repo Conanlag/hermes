@@ -1,10 +1,15 @@
 # Compilacion
 /src/hermes/hermes
 
+#Pruebas archivos
+/src/hermes/isa.py
+/src/hermes/input.py
+/src/hermes/output.py
 
 #datos
 /src/hermes/data/job_id
 /src/hermes/data/jobs.json
+
 
 # Object files
 *.o
