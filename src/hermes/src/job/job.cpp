@@ -2,6 +2,7 @@
 
 #include "process.h"
 #include "terminal.colors.h"
+#include "timestamp.h"
 
 #include <fstream>
 #include <iostream>
@@ -26,6 +27,7 @@ using json = nlohmann::json;
 namespace {
 
 const string archivoJobs = "data/jobs.json";
+const string archivoConfiguracion = "data/config.json";
 
 
 json leerJobs() {
@@ -54,6 +56,39 @@ json leerJobs() {
     }
 
     return jobs;
+}
+
+
+unsigned int obtenerTrabajosMaximos() {
+
+    constexpr unsigned int valorPredeterminado = 5;
+
+    ifstream archivo(archivoConfiguracion);
+
+    if (!archivo.is_open()) {
+
+        return valorPredeterminado;
+    }
+
+    try {
+
+        json configuracion;
+
+        archivo >> configuracion;
+
+        if (
+            configuracion.contains("trabajos_maximos") &&
+            configuracion["trabajos_maximos"].is_number_unsigned() &&
+            configuracion["trabajos_maximos"] > 0
+        ) {
+
+            return configuracion["trabajos_maximos"];
+        }
+
+    } catch (const json::parse_error&) {
+    }
+
+    return valorPredeterminado;
 }
 
 
@@ -149,6 +184,186 @@ bool modificarJobs(
     close(descriptor);
 
     return resultado;
+}
+
+
+void supervisarJob(
+    unsigned int jobId,
+    const string& programa,
+    const vector<string>& argumentos,
+    int pipeEscritura
+);
+
+
+bool ejecutarJobsEnCola() {
+
+    bool seLanzóAlgúnTrabajo = false;
+
+    while (true) {
+
+        json jobs = leerJobs();
+
+        unsigned int trabajosRunning = 0;
+
+        for (const auto& job : jobs) {
+
+            if (
+                job.contains("status") &&
+                job["status"] == "RUNNING"
+            ) {
+
+                ++trabajosRunning;
+            }
+        }
+
+        unsigned int trabajosMaximos =
+            obtenerTrabajosMaximos();
+
+        if (trabajosRunning >= trabajosMaximos) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        unsigned int jobIdCola = 0;
+        string programaCola;
+        vector<string> argumentosCola;
+        bool encontrado = false;
+
+        for (const auto& job : jobs) {
+
+            if (
+                !job.contains("status") ||
+                job["status"] != "QUEUED"
+            ) {
+
+                continue;
+            }
+
+            if (
+                !job.contains("job_id") ||
+                !job["job_id"].is_number_unsigned()
+            ) {
+
+                continue;
+            }
+
+            if (
+                !job.contains("programa") ||
+                !job["programa"].is_string()
+            ) {
+
+                continue;
+            }
+
+            if (
+                !job.contains("argumentos") ||
+                !job["argumentos"].is_array()
+            ) {
+
+                continue;
+            }
+
+            jobIdCola = job["job_id"];
+            programaCola = job["programa"];
+            argumentosCola.clear();
+
+            for (const auto& argumento : job["argumentos"]) {
+
+                if (argumento.is_string()) {
+
+                    argumentosCola.push_back(
+                        argumento.get<string>()
+                    );
+                }
+            }
+
+            encontrado = true;
+            break;
+        }
+
+        if (!encontrado) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        int pipefd[2];
+
+        if (pipe(pipefd) == -1) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        pid_t supervisor = fork();
+
+        if (supervisor < 0) {
+
+            close(pipefd[0]);
+            close(pipefd[1]);
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        if (supervisor == 0) {
+
+            close(pipefd[0]);
+
+            supervisarJob(
+                jobIdCola,
+                programaCola,
+                argumentosCola,
+                pipefd[1]
+            );
+        }
+
+        close(pipefd[1]);
+
+        pid_t pidReal = 0;
+
+        ssize_t bytesLeidos =
+            read(
+                pipefd[0],
+                &pidReal,
+                sizeof(pidReal)
+            );
+
+        close(pipefd[0]);
+
+        if (
+            bytesLeidos != sizeof(pidReal) ||
+            pidReal <= 0
+        ) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        bool pidActualizado = modificarJobs(
+            [&](json& jobsActualizados) {
+
+                for (auto& item : jobsActualizados) {
+
+                    if (
+                        item.contains("job_id") &&
+                        item["job_id"] == jobIdCola
+                    ) {
+
+                        item["pid"] =
+                            static_cast<int>(pidReal);
+
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        );
+
+        if (!pidActualizado) {
+
+            return seLanzóAlgúnTrabajo;
+        }
+
+        seLanzóAlgúnTrabajo = true;
+    }
 }
 
 
@@ -491,6 +706,21 @@ Job crearJob(
     unsigned int siguienteId =
         obtenerSiguienteId(jobs);
 
+    unsigned int trabajosRunning = 0;
+
+    for (const auto& jobExistente : jobs) {
+
+        if (
+            jobExistente.contains("status") &&
+            jobExistente["status"] == "RUNNING"
+        ) {
+
+            ++trabajosRunning;
+        }
+    }
+
+    unsigned int trabajosMaximos =
+        obtenerTrabajosMaximos();
 
     /*
      * ---------------------------------------------
@@ -515,10 +745,20 @@ Job crearJob(
         argumentos;
 
     /*
-     * El Job nace en QUEUED.
+     * El Job nace en QUEUED o RUNNING.
      */
     job.status =
-        Status::QUEUED;
+        trabajosRunning < trabajosMaximos
+            ? Status::RUNNING
+            : Status::QUEUED;
+
+    job.tiempo_recepcion =
+        obtenerFechaHoraActual();
+
+    job.tiempo_inicio =
+        job.status == Status::RUNNING
+            ? job.tiempo_recepcion
+            : "";
 
     job.codigoSalida =
         -1;
@@ -526,7 +766,7 @@ Job crearJob(
 
     /*
      * ---------------------------------------------
-     * 4. Guardar QUEUED
+     * 4. Guardar QUEUED o RUNNING
      * ---------------------------------------------
      */
 
@@ -549,6 +789,15 @@ Job crearJob(
             job.status
         );
 
+    nuevoJob["tiempo_recepcion"] =
+        job.tiempo_recepcion;
+
+    if (job.status == Status::RUNNING) {
+
+        nuevoJob["tiempo_inicio"] =
+            job.tiempo_inicio;
+    }
+
     nuevoJob["codigo_salida"] =
         job.codigoSalida;
 
@@ -566,6 +815,12 @@ Job crearJob(
         throw runtime_error(
             "No se pudo guardar jobs.json"
         );
+    }
+
+
+    if (job.status == Status::QUEUED) {
+
+        return job;
     }
 
 
@@ -706,7 +961,7 @@ Job crearJob(
         }
     );
 
-
+    
     return job;
 }
 
@@ -750,7 +1005,7 @@ bool actualizarResultadoJob(
     int codigoSalida
 ) {
 
-    return modificarJobs(
+    bool actualizado = modificarJobs(
         [&](json& jobs) {
 
             for (
@@ -771,6 +1026,9 @@ bool actualizarResultadoJob(
                     job["codigo_salida"] =
                         codigoSalida;
 
+                    job["tiempo_terminacion"] =
+                        obtenerFechaHoraActual();
+
                     return true;
                 }
             }
@@ -778,6 +1036,13 @@ bool actualizarResultadoJob(
             return false;
         }
     );
+
+    if (actualizado) {
+
+        ejecutarJobsEnCola();
+    }
+
+    return actualizado;
 }
 
 

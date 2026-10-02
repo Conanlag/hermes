@@ -21,6 +21,10 @@ struct Job {
 
     Status status;
 
+    std::string tiempo_recepcion;
+    std::string tiempo_inicio;
+    std::string tiempo_terminacion;
+
     int codigoSalida;
 };
 
