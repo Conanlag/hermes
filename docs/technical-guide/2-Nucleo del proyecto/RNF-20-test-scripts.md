@@ -29,19 +29,21 @@ Las pruebas verifican:
 * Filtrado de Jobs.
 * Estados finales de los Jobs.
 
-Cuando una prueba se ejecuta correctamente se muestra:
+Cada prueba muestra su resultado en la terminal mediante:
 
 ```text
 [PASS]
 ```
 
-Cuando una prueba falla:
+cuando la prueba es exitosa, y:
 
 ```text
 [FAIL]
 ```
 
-Además, `make test` devuelve un código de salida `0` cuando todas las pruebas son exitosas y `1` cuando alguna prueba falla.
+cuando se produce un error.
+
+Al finalizar, el script devuelve un código de salida `0` si todas las pruebas fueron exitosas. Si alguna prueba falla, devuelve `1`.
 
 ---
 
@@ -59,20 +61,32 @@ hermes/
     └── test.sh
 ```
 
-El archivo `test.sh` contiene las funciones necesarias para ejecutar las pruebas, obtener los identificadores de los Jobs, consultar sus estados y determinar si cada prueba fue exitosa.
+El archivo `test.sh` contiene el conjunto de pruebas automatizadas y las funciones necesarias para ejecutarlas y comprobar sus resultados.
 
-El `Makefile` contiene el objetivo:
+Antes de ejecutar las pruebas por primera vez, es necesario otorgar permiso de ejecución al script mediante:
+
+```bash
+chmod +x test/test.sh
+```
+
+El comando `chmod +x` agrega el permiso de ejecución al archivo `test.sh`, permitiendo que Linux pueda ejecutarlo directamente.
+
+Después de otorgar el permiso, las pruebas pueden ejecutarse con:
+
+```bash
+make test
+```
+
+El `Makefile` contiene el objetivo encargado de ejecutar las pruebas:
 
 ```makefile
 test: $(TARGET)
 	@./test/test.sh
 ```
 
-Esto permite compilar Hermes y ejecutar las pruebas mediante:
+De esta manera, `make test` primero compila el ejecutable `hermes` y posteriormente ejecuta el script `test.sh`.
 
-```bash
-make test
-```
+El permiso de ejecución del script solamente necesita configurarse una vez, siempre que el archivo conserve dicho permiso.
 
 ---
 
@@ -88,22 +102,40 @@ Las pruebas automatizadas utilizan los estados definidos para los Jobs de Hermes
 | `FAILED`    | El proceso terminó con un código de salida diferente de `0` o no pudo ejecutarse.    |
 | `CANCELED`  | El Job recibió una solicitud de cancelación mientras el proceso estaba ejecutándose. |
 
-La prueba de cancelación utiliza un proceso de larga duración:
+Las pruebas comprueban diferentes transiciones de estado. Por ejemplo, para una ejecución correcta:
+
+```text
+QUEUED → RUNNING → SUCCEEDED
+```
+
+Para un proceso que no puede ejecutarse:
+
+```text
+QUEUED → RUNNING → FAILED
+```
+
+Y para un proceso cancelado:
+
+```text
+QUEUED → RUNNING → CANCELED
+```
+
+En particular, la prueba de cancelación utiliza un proceso de larga duración:
 
 ```bash
 hermes job sleep 10
 ```
 
-Después de aproximadamente dos segundos se solicita su cancelación:
+La prueba espera aproximadamente dos segundos y posteriormente solicita su cancelación:
 
 ```bash
 hermes cancel <job_id>
 ```
 
-Finalmente, la prueba verifica que el estado registrado sea:
+Finalmente, verifica que el Job termine con el estado:
 
 ```text
 CANCELED
 ```
 
-Esto permite comprobar que la cancelación se realiza sobre un proceso que todavía está en ejecución y no después de que el Job haya terminado.
+Esto permite comprobar que Hermes puede cancelar un proceso real mientras todavía se encuentra en ejecución, en lugar de solicitar la cancelación después de que el proceso haya terminado.
