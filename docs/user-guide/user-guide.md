@@ -1,228 +1,340 @@
+# GUÍA DE USUARIO: HERMES
 
-## Requisitos
+## 1. Prerrequisitos
 
-Antes de comenzar, asegúrate de tener instalado:
+Antes de comenzar, asegúrate de contar con los siguientes requisitos:
 
-* [Git](https://git-scm.com/)
-* Linux o WSL (Windows Subsystem for Linux)
-* Ubuntu, en caso de utilizar WSL
+* **Git**
+* **Linux** o **WSL (Windows Subsystem for Linux)**
+* **Ubuntu**, en caso de utilizar WSL
+* **Make**
+* **Visual Studio Code**, recomendado para trabajar con el código fuente
 
----
+> **Nota:** Hermes está diseñado para ejecutarse en Linux. Si utilizas Windows, se recomienda utilizar Ubuntu mediante WSL.
 
-## 1. Clonar el repositorio
+### Verificar Ubuntu
 
-Clona el repositorio ejecutando:
+Si utilizas WSL, puedes iniciar Ubuntu desde CMD o PowerShell:
 
 ```bash
-git clone https://github.com/Conanlag/ppl.git
+ubuntu
 ```
 
-Entra a la carpeta del proyecto:
+Para comprobar la versión de Ubuntu:
 
 ```bash
-cd ppl
+lsb_release -a
 ```
 
----
+### Verificar Git
 
-## 2. Crear una rama propia
-
-Para trabajar sin modificar directamente la rama principal, crea una rama con tu nombre:
+Comprueba que Git esté instalado:
 
 ```bash
-git branch <nombre-rama>
+git --version
 ```
 
-Por ejemplo:
+Si Git no está instalado:
 
 ```bash
-git branch alberto
+sudo apt update
+sudo apt install git
 ```
 
-Después, cambia a tu nueva rama:
+### Actualizar los paquetes de Ubuntu
+
+Se recomienda actualizar la información de los paquetes antes de instalar las herramientas necesarias:
 
 ```bash
-git checkout <nombre-rama>
+sudo apt update
 ```
 
-También puedes crear y cambiar a la rama en un solo comando:
+### Instalar Make y herramientas de compilación
+
+Instala `build-essential`, que incluye Make y otras herramientas necesarias para compilar el proyecto:
 
 ```bash
-git checkout -b <nombre-rama>
+sudo apt install build-essential
 ```
 
----
-
-## 3. Realizar cambios y hacer commit
-
-Después de realizar tus cambios, agrega los archivos modificados:
+Comprueba la instalación:
 
 ```bash
-git add .
+make --version
 ```
 
-Crea un commit con un mensaje descriptivo:
+### Visual Studio Code
+
+Si utilizas Visual Studio Code con WSL, puedes abrir el proyecto desde la carpeta correspondiente utilizando:
 
 ```bash
-git commit -m "Descripción de los cambios"
-```
-
-Por ejemplo:
-
-```bash
-git commit -m "Agrega configuración inicial del proyecto"
-```
-
----
-
-## 4. Subir tu rama al repositorio
-
-Para subir tu rama a GitHub:
-
-```bash
-git push origin <nombre-rama>
-```
-
-Por ejemplo:
-
-```bash
-git push origin alberto
+code .
 ```
 
 ---
 
-## 5. Mantener tu rama actualizada con `main`
+## 2. Clonar el repositorio
 
-Antes de comenzar a trabajar, es importante asegurarse de tener los cambios más recientes de `main`.
-
-Primero, cambia a la rama `main`:
+Clona el repositorio de Hermes:
 
 ```bash
-git checkout main
+git clone https://github.com/Conanlag/hermes.git
 ```
 
-Actualiza la rama:
+Después, entra al directorio del proyecto:
 
 ```bash
-git pull origin main
+cd hermes/src/hermes
 ```
 
-Después, regresa a tu rama:
+Puedes verificar que te encuentras en la ubicación correcta con:
 
 ```bash
-git checkout <nombre-rama>
-```
-
-Y trae los cambios recientes de `main` a tu rama:
-
-```bash
-git merge main
-```
-
-Si existen conflictos, Git los indicará. Deberás resolverlos manualmente antes de continuar.
-
-Una vez resueltos los conflictos:
-
-```bash
-git add .
-git commit -m "Resuelve conflictos con main"
+pwd
 ```
 
 ---
 
-## 6. Pasar los cambios de tu rama a `main`
+## 3. Compilación del proyecto
 
-Una vez que tu trabajo esté terminado y listo para integrarse a `main`, cambia a la rama principal:
+Una vez dentro del directorio `hermes`, utiliza el Makefile incluido en el proyecto.
 
-```bash
-git checkout main
-```
+### Compilar e instalar Hermes
 
-Antes de integrar tus cambios, asegúrate de tener la versión más reciente:
+Ejecuta:
 
 ```bash
-git pull origin main
+make install
 ```
 
-Ahora integra tu rama:
+Este comando compila el proyecto y coloca el ejecutable en:
+
+```text
+~/.local/bin/hermes
+```
+
+La instalación se realiza dentro del directorio personal del usuario, por lo que **no es necesario utilizar `sudo`**.
+
+### Limpiar la compilación
+
+Para eliminar los archivos generados durante la compilación:
 
 ```bash
-git merge <nombre-rama>
+make clean
 ```
 
-Por ejemplo:
+Después puedes volver a compilar utilizando:
 
 ```bash
-git merge alberto
+make install
 ```
-
-Si no existen conflictos, puedes subir los cambios a GitHub:
-
-```bash
-git push origin main
-```
-
-> **Importante:** Antes de hacer un `merge` hacia `main`, asegúrate de que tus cambios estén terminados y que hayas revisado que no existan conflictos.
 
 ---
 
-## 7. Instalar WSL y Ubuntu
+## 4. Configurar el PATH
 
-Si utilizas Windows, puedes instalar WSL junto con Ubuntu desde la **Microsoft Store**.
+Para poder ejecutar `hermes` desde cualquier directorio, es necesario que `~/.local/bin` se encuentre en el `PATH`.
 
-1. Abre la Microsoft Store.
-2. Busca **Ubuntu**.
-3. Instala la versión disponible.
-4. Abre Ubuntu desde el menú de inicio.
-5. La primera vez que lo ejecutes, se te solicitará crear:
+Ejecuta:
 
-   * Un nombre de usuario.
-   * Una contraseña.
-
-Una vez configurado, podrás utilizar la terminal de Ubuntu para ejecutar los comandos del proyecto.
-
-### Alternativa: instalar WSL desde PowerShell
-
-También puedes instalar WSL directamente desde PowerShell ejecutándolo como administrador:
-
-```powershell
-wsl --install
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-Después de la instalación, reinicia tu computadora si Windows lo solicita.
+Estos comandos realizan lo siguiente:
+
+* `echo ... >> ~/.bashrc` agrega permanentemente `~/.local/bin` al `PATH`.
+* `source ~/.bashrc` recarga la configuración actual de la terminal para aplicar el cambio inmediatamente.
+
+> **Nota:** Esta configuración solo necesita realizarse una vez.
+
+Puedes comprobar que Hermes está disponible con:
+
+```bash
+which hermes
+```
+
+Deberías obtener una ruta similar a:
+
+```text
+/home/usuario/.local/bin/hermes
+```
 
 ---
 
-## Flujo recomendado
+# 5. Ejecutar Hermes
 
-Para trabajar normalmente en el proyecto, puedes seguir este flujo:
+Una vez instalado y configurado el `PATH`, Hermes puede ejecutarse desde cualquier directorio.
 
-```bash
-# Actualizar main
-git checkout main
-git pull origin main
-
-# Regresar a tu rama
-git checkout <nombre-rama>
-
-# Obtener los últimos cambios de main
-git merge main
-
-# Trabajar en el proyecto...
-
-# Guardar cambios
-git add .
-git commit -m "Descripción de los cambios"
-
-# Subir tu rama
-git push origin <nombre-rama>
-```
-
-Cuando tu trabajo esté listo para integrarse:
+Para comprobar que la instalación funciona correctamente:
 
 ```bash
-git checkout main
-git pull origin main
-git merge <nombre-rama>
-git push origin main
+hermes --version
 ```
+
+Si la instalación fue correcta, se mostrará la versión actual de Hermes.
+
+---
+
+# 6. Comandos disponibles
+
+Hermes cuenta actualmente con los siguientes comandos:
+
+```text
+hermes job
+hermes filter
+hermes cancel
+hermes --version
+```
+
+---
+
+## 6.1 Hermes Job
+
+El comando `job` permite crear un nuevo Job y ejecutar un programa con sus argumentos.
+
+### Sintaxis
+
+```bash
+hermes job <programa> [argumentos...]
+```
+
+### Ejemplo
+
+Ejecutar `sleep` durante 30 segundos:
+
+```bash
+hermes job sleep 30
+```
+
+Otro ejemplo:
+
+```bash
+hermes job echo Hola
+```
+
+Al crear un Job, Hermes asigna un identificador y administra su estado durante el ciclo de ejecución.
+
+Los estados utilizados por Hermes son:
+
+```text
+QUEUED
+RUNNING
+SUCCEEDED
+FAILED
+CANCELED
+```
+
+---
+
+## 6.2 Hermes Filter
+
+El comando `filter` permite buscar Jobs utilizando diferentes criterios:
+
+* `id`
+* `programa`
+* `status`
+
+### Sintaxis
+
+```bash
+hermes filter <id|programa|status> <valor>
+```
+
+### Buscar por ID
+
+```bash
+hermes filter id 30
+```
+
+### Buscar por programa
+
+```bash
+hermes filter programa sleep
+```
+
+### Buscar por estado
+
+```bash
+hermes filter status QUEUED
+```
+
+El filtro permite consultar los Jobs almacenados en Hermes que coincidan con el criterio indicado.
+
+---
+
+## 6.3 Hermes Cancel
+
+El comando `cancel` permite solicitar la cancelación de un Job.
+
+### Sintaxis
+
+```bash
+hermes cancel <id>
+```
+
+### Ejemplo
+
+```bash
+hermes cancel 30
+```
+
+El Job correspondiente será marcado como cancelado de acuerdo con su estado y ciclo de ejecución.
+
+---
+
+## 6.4 Hermes --version
+
+Permite consultar la versión instalada de Hermes.
+
+### Sintaxis
+
+```bash
+hermes --version
+```
+
+### Ejemplo
+
+```bash
+$ hermes --version
+Hermes version ...
+```
+
+---
+
+# 7. Flujo básico de uso
+
+Una vez instalado Hermes, un flujo básico puede ser:
+
+### 1. Crear un Job
+
+```bash
+hermes job sleep 30
+```
+
+### 2. Consultar el Job
+
+```bash
+hermes filter id 1
+```
+
+### 3. Consultar Jobs por estado
+
+```bash
+hermes filter status RUNNING
+```
+
+### 4. Cancelar un Job
+
+```bash
+hermes cancel 1
+```
+
+### 5. Consultar nuevamente su estado
+
+```bash
+hermes filter id 1
+```
+
+De esta manera se puede crear, consultar y cancelar un Job utilizando las funcionalidades disponibles actualmente en Hermes.
