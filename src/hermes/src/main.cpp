@@ -8,6 +8,7 @@
 #include "validator.h"
 #include "terminal.colors.h"
 #include "cancel.h"
+#include "help.h"
 
 
 using std::cout;
@@ -34,6 +35,10 @@ int main(int argc, char* argv[]) {
 
     if (comando == "--version") {
         return version();
+    }
+
+    if (comando == "--help") {
+        return mostrarAyuda();
     }
 
     if (comando == "job") {

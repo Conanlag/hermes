@@ -186,6 +186,7 @@ hermes job
 hermes filter
 hermes cancel
 hermes --version
+hermes --help
 ```
 
 ---
@@ -300,6 +301,31 @@ hermes --version
 $ hermes --version
 Hermes version ...
 ```
+
+---
+
+## 6.5 Hermes --help
+
+Muestra la ayuda de uso con todos los comandos, estados, ejemplos y códigos de salida.
+
+### Sintaxis
+
+```bash
+hermes --help
+```
+
+### Ejemplo
+
+```bash
+$ hermes --help
+HERMES - Gestor de trabajos en cola
+
+Uso: hermes <comando> [argumentos..]
+...
+Codigos de salida: 0 exito, 1 error
+```
+
+Si no recuerdas un comando, empieza siempre por aquí.
 
 ---
 
