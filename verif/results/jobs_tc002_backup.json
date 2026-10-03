@@ -1,0 +1,157 @@
+[
+    {
+        "argumentos": [
+            "5"
+        ],
+        "codigo_salida": 0,
+        "job_id": 1,
+        "pid": 2325,
+        "programa": "sleep",
+        "status": "SUCCEEDED",
+        "tiempo_terminacion": "2026-10-01 22:21:20"
+    },
+    {
+        "argumentos": [
+            "15"
+        ],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 2,
+        "pid": 882,
+        "programa": "sleep",
+        "status": "SUCCEEDED"
+    },
+    {
+        "argumentos": [
+            "15"
+        ],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 3,
+        "pid": 1088,
+        "programa": "sleep",
+        "status": "SUCCEEDED"
+    },
+    {
+        "argumentos": [
+            "hola"
+        ],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 4,
+        "pid": 1174,
+        "programa": "echo",
+        "status": "SUCCEEDED"
+    },
+    {
+        "argumentos": [
+            "30"
+        ],
+        "cancel_requested": true,
+        "codigo_salida": -15,
+        "job_id": 5,
+        "pid": 1556,
+        "programa": "sleep",
+        "status": "CANCELED"
+    },
+    {
+        "argumentos": [
+            "30"
+        ],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 6,
+        "pid": 1747,
+        "programa": "sleep",
+        "status": "SUCCEEDED"
+    },
+    {
+        "argumentos": [
+            "30"
+        ],
+        "cancel_requested": true,
+        "codigo_salida": -15,
+        "job_id": 7,
+        "pid": 1761,
+        "programa": "sleep",
+        "status": "CANCELED"
+    },
+    {
+        "argumentos": [
+            "hola"
+        ],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 8,
+        "pid": 2317,
+        "programa": "echo",
+        "status": "SUCCEEDED",
+        "tiempo_inicio": "2026-10-01 22:21:15",
+        "tiempo_recepcion": "2026-10-01 22:21:15",
+        "tiempo_terminacion": "2026-10-01 22:21:15"
+    },
+    {
+        "argumentos": [],
+        "cancel_requested": false,
+        "codigo_salida": 1,
+        "job_id": 9,
+        "pid": 2833,
+        "programa": "false",
+        "status": "FAILED",
+        "tiempo_inicio": "2026-10-02 20:41:23",
+        "tiempo_recepcion": "2026-10-02 20:41:23",
+        "tiempo_terminacion": "2026-10-02 20:41:23"
+    },
+    {
+        "argumentos": [],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 10,
+        "pid": 2857,
+        "programa": "true",
+        "status": "SUCCEEDED",
+        "tiempo_inicio": "2026-10-02 20:41:32",
+        "tiempo_recepcion": "2026-10-02 20:41:32",
+        "tiempo_terminacion": "2026-10-02 20:41:32"
+    },
+    {
+        "argumentos": [
+            "30"
+        ],
+        "cancel_requested": true,
+        "codigo_salida": -15,
+        "job_id": 11,
+        "pid": 2961,
+        "programa": "sleep",
+        "status": "CANCELED",
+        "tiempo_inicio": "2026-10-02 20:43:42",
+        "tiempo_recepcion": "2026-10-02 20:43:42",
+        "tiempo_terminacion": "2026-10-02 20:44:09"
+    },
+    {
+        "argumentos": [
+            "vivo"
+        ],
+        "cancel_requested": false,
+        "codigo_salida": 0,
+        "job_id": 12,
+        "pid": 2982,
+        "programa": "echo",
+        "status": "SUCCEEDED",
+        "tiempo_inicio": "2026-10-02 20:43:47",
+        "tiempo_recepcion": "2026-10-02 20:43:47",
+        "tiempo_terminacion": "2026-10-02 20:43:47"
+    },
+    {
+        "argumentos": [],
+        "cancel_requested": false,
+        "codigo_salida": 127,
+        "job_id": 13,
+        "pid": 3069,
+        "programa": "programa_que_no_existe_xyz",
+        "status": "FAILED",
+        "tiempo_inicio": "2026-10-02 20:45:07",
+        "tiempo_recepcion": "2026-10-02 20:45:07",
+        "tiempo_terminacion": "2026-10-02 20:45:07"
+    }
+]
