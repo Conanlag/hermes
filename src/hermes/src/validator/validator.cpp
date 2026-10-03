@@ -12,7 +12,7 @@ ResultadoValidacion validarComando(const string& comando) {
         return {
             false,
             CodigoValidacion::VACIO,
-            "Comando vacio. Comandos validos: job, filter, cancel, --version"
+            "Comando vacio. Comandos validos: job, filter, cancel, --version, --help"
         };
     }
 
@@ -20,7 +20,8 @@ ResultadoValidacion validarComando(const string& comando) {
         comando == "job" ||
         comando == "filter" ||
         comando == "cancel" ||
-        comando == "--version"
+        comando == "--version" ||
+        comando == "--help"
     ) {
 
         return {
@@ -35,7 +36,7 @@ ResultadoValidacion validarComando(const string& comando) {
         CodigoValidacion::NO_AUTORIZADO,
         "Comando no reconocido: " +
         comando +
-        ". Comandos validos: job, filter, cancel, --version"
+        ". Comandos validos: job, filter, cancel, --version, --help"
     };
 }
 
