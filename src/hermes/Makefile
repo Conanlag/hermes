@@ -6,7 +6,6 @@ TARGET = hermes
 
 SRC = $(shell find src -type f -name '*.cpp')
 
-
 INSTALL_DIR = $(HOME)/.local/bin
 
 all: $(TARGET)
@@ -24,4 +23,7 @@ install: $(TARGET)
 uninstall:
 	rm -f $(INSTALL_DIR)/$(TARGET)
 
-.PHONY: all clean install uninstall
+test: $(TARGET)
+	@./tests/test.sh
+
+.PHONY: all clean install uninstall test
