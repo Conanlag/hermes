@@ -39,6 +39,15 @@ void filtrarPorId(unsigned int job_id){
     cout << "Codigo de salida: "
          << job.codigoSalida << endl;
 
+    cout << "Recepcion: "
+         << job.tiempo_recepcion << endl;
+
+    cout << "Inicio: "
+         << job.tiempo_inicio << endl;
+
+    cout << "Terminacion: "
+         << job.tiempo_terminacion << endl;
+
     cout << "Argumentos: ";
 
     for (const auto& argumento : job.argumentos) {

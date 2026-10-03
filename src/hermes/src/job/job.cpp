@@ -1168,6 +1168,36 @@ bool obtenerJobPorId(
             jobOut.codigoSalida = -1;
         }
 
+        if (
+            item.contains("tiempo_recepcion") &&
+            item["tiempo_recepcion"].is_string()
+        ) {
+            jobOut.tiempo_recepcion =
+                item["tiempo_recepcion"];
+        } else {
+            jobOut.tiempo_recepcion = "";
+        }
+
+        if (
+            item.contains("tiempo_inicio") &&
+            item["tiempo_inicio"].is_string()
+        ) {
+            jobOut.tiempo_inicio =
+                item["tiempo_inicio"];
+        } else {
+            jobOut.tiempo_inicio = "";
+        }
+
+        if (
+            item.contains("tiempo_terminacion") &&
+            item["tiempo_terminacion"].is_string()
+        ) {
+            jobOut.tiempo_terminacion =
+                item["tiempo_terminacion"];
+        } else {
+            jobOut.tiempo_terminacion = "";
+        }
+
         return true;
     }
 
