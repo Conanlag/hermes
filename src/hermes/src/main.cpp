@@ -82,20 +82,26 @@ int main(int argc, char* argv[]) {
             std::stoul(argv[2])
         );
 
-    if (!cancelarJob(id)) {
+    ResultadoCancelacion cr = cancelarJobDetallado(id);
 
-        error(
-            "No se pudo cancelar el Job: ",
-            id
-        );
-
+    if (!cr.exito) {
+        if (cr.codigo == CodigoCancelacion::NO_EXISTE) {
+            error("No existe el Job ID: ", id);
+        } else if (cr.codigo == CodigoCancelacion::NO_CANCELABLE) {
+            error(cr.mensaje);
+        } else {
+            error("No se pudo cancelar el Job: ", id, ". ", cr.mensaje);
+        }
         return 1;
     }
 
-    info(
-        "Cancelación solicitada para el Job: ",
-        id
-    );
+    // QUEUED se cancela directo (ya está CANCELED).
+    // RUNNING queda con solicitud registrada (el supervisor confirma).
+    if (cr.codigo == CodigoCancelacion::CANCELADO) {
+        info("Job cancelado: ", id);
+    } else {
+        info("Cancelación solicitada para el Job: ", id);
+    }
 
     return 0;
 }
