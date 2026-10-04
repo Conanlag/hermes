@@ -1,0 +1,97 @@
+name: Reporte de Defecto y Excepción
+description: Registra un fallo (FAIL) en un TC y solicita su excepción.
+title: "[DEFECTO] Fallo en TC-XXX: <Descripción corta>"
+labels: ["bug", "QA", "excepcion"]
+body:
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: 🐞 Descripción del Defecto
+      description: Describe brevemente qué falló (código incorrecto, test-case mal diseñado, o condición inadecuada).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severidad
+    attributes:
+      label: 📊 Severidad
+      options:
+        - "Alta: Falla crítica, crash del sistema, pérdida de datos."
+        - "Media: Falla funcional de un requisito, pero el sistema no crashea."
+        - "Baja: Error de formato, textos inexactos, o error de diseño de la prueba."
+    validations:
+      required: true
+
+  - type: textarea
+    id: pasos
+    attributes:
+      label: 👣 Pasos para reproducir
+      description: ¿Cómo se llegó al error?
+      value: |
+        1. Ejecutar el comando: `bash verif/scripts/TC-XXX.sh`
+        2. Observar la salida en el paso X.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: ✅ Resultado Esperado
+      description: Lo que dicta el diseño del TC-XXX.md.
+    validations:
+      required: true
+
+  - type: textarea
+    id: observado
+    attributes:
+      label: ❌ Resultado Observado
+      description: Lo que realmente arrojó la terminal o el script.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: 📂 Evidencia
+      description: Adjunta aquí los logs generados en verif/results/ o pega el texto directamente.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ## ⚠️ Gestión de Excepción
+        Justificación requerida para mantener el defecto abierto sin corregir en la iteración actual.
+
+  - type: input
+    id: impacto
+    attributes:
+      label: Impacto
+      placeholder: Ej. Ninguno funcional, solo desfase de diseño del test-case vs el alcance actual.
+    validations:
+      required: true
+
+  - type: input
+    id: riesgo
+    attributes:
+      label: Riesgo residual
+      placeholder: Ej. Bajo para el Hito 1, se posterga para el Hito 2.
+    validations:
+      required: true
+
+  - type: input
+    id: responsable
+    attributes:
+      label: Responsable
+      placeholder: Ej. Alan
+    validations:
+      required: true
+
+  - type: input
+    id: aprobacion
+    attributes:
+      label: Aprobación
+      placeholder: Ej. Solicitud de aprobación para mantener el Issue abierto.
+    validations:
+      required: true
