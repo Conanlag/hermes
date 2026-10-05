@@ -4,7 +4,7 @@
 
 Se implementó un sistema de pruebas automatizadas para verificar el funcionamiento de Hermes de manera rápida y reproducible.
 
-Las pruebas se encuentran en el directorio `test/` y permiten comprobar diferentes funcionalidades del sistema sin necesidad de realizar las verificaciones manualmente.
+Las pruebas se encuentran en el directorio `tests/` y permiten comprobar diferentes funcionalidades del sistema sin necesidad de realizar las verificaciones manualmente.
 
 La ejecución de todas las pruebas se realiza mediante un único comando:
 
@@ -57,7 +57,7 @@ hermes/
 ├── data/
 ├── include/
 ├── src/
-└── test/
+└── tests/
     └── test.sh
 ```
 
@@ -66,7 +66,7 @@ El archivo `test.sh` contiene el conjunto de pruebas automatizadas y las funcion
 Antes de ejecutar las pruebas por primera vez, es necesario otorgar permiso de ejecución al script mediante:
 
 ```bash
-chmod +x test/test.sh
+chmod +x tests/test.sh
 ```
 
 El comando `chmod +x` agrega el permiso de ejecución al archivo `test.sh`, permitiendo que Linux pueda ejecutarlo directamente.
@@ -81,7 +81,7 @@ El `Makefile` contiene el objetivo encargado de ejecutar las pruebas:
 
 ```makefile
 test: $(TARGET)
-	@./test/test.sh
+	@./tests/test.sh
 ```
 
 De esta manera, `make test` primero compila el ejecutable `hermes` y posteriormente ejecuta el script `test.sh`.
