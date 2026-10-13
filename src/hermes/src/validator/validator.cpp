@@ -108,6 +108,19 @@ ResultadoValidacion validarIdTexto(
             "ID vacio. Debe proporcionar un ID numerico."
         };
     }
+    // Valida si solo los caracteres pertenecen a numeros enteros positivos
+    for (char caracter : textoId) {
+        if (caracter < '0' || caracter > '9') {
+            return {
+                false,
+                CodigoValidacion::MALFORMADO,
+                "ID mal formado: " +
+                textoId +
+                ". Debe ser un numero entero positivo."
+            };
+        }
+    }
+
 
     try {
 
