@@ -474,8 +474,9 @@ void leerStderrProceso(
              * Evitar imprimir una línea vacía
              * como un error.
              */
-            if (!mensaje.empty()) {
-
+            if (
+                mensaje.find("No se pudo ejecutar el programa '") == 0
+            ) {
                 error(mensaje);
             }
 
@@ -491,10 +492,13 @@ void leerStderrProceso(
     /*
      * Puede quedar texto sin '\n' al final.
      */
-    if (!linea.empty()) {
-
+    if (
+        linea.find("No se pudo ejecutar el programa '") == 0
+    ) {
         error(linea);
     }
+
+
 
 
     close(pipeStderr);
