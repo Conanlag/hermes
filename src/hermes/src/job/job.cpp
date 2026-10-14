@@ -3,6 +3,7 @@
 #include "process.h"
 #include "terminal.colors.h"
 #include "timestamp.h"
+#include "data_paths.h"
 
 #include <fstream>
 #include <iostream>
@@ -26,8 +27,8 @@ using json = nlohmann::json;
 
 namespace {
 
-const string archivoJobs = "data/jobs.json";
-const string archivoConfiguracion = "data/config.json";
+const string archivoJobs = hermes::rutaDatos("jobs.json");
+const string archivoConfiguracion = hermes::rutaDatos("config.json");
 
 
 json leerJobs() {

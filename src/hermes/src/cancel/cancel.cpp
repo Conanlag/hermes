@@ -2,10 +2,11 @@
 
 #include "job.h"
 #include "process.h"
-
+#include "data_paths.h"
 #include <fstream>
 
 #include <nlohmann/json.hpp>
+
 
 using std::ifstream;
 
@@ -20,7 +21,8 @@ bool cancelarJob(unsigned int jobId) {
 
 ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
 
-    const string archivoJobs = "data/jobs.json";
+    const string archivoJobs = hermes::rutaDatos("jobs.json");
+
 
     ifstream archivo(archivoJobs);
 
