@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <cstdlib>
@@ -9,15 +10,15 @@
 namespace hermes {
 
 inline std::string inicializarDatos() {
+    namespace fs = std::filesystem;
+
     const char* home = std::getenv("HOME");
 
     if (home == nullptr || home[0] == '\0') {
         throw std::runtime_error(
-            "No se pudo determinar el directorio HOME del usuario"
+            "No se pudo determinar HOME del usuario"
         );
     }
-
-    namespace fs = std::filesystem;
 
     const fs::path directorio =
         fs::path(home) / ".local" / "share" / "hermes" / "data";
@@ -27,37 +28,56 @@ inline std::string inicializarDatos() {
 
     if (error) {
         throw std::runtime_error(
-            "No se pudo crear el directorio de datos de Hermes: "
+            "No se pudo crear el directorio de datos: "
             + error.message()
         );
     }
 
-    const fs::path archivoJobs = directorio / "jobs.json";
+    // Crear cada archivo solamente si no existe.
+    const auto crearArchivoSiFalta =
+        [](const fs::path& ruta, const std::string& contenido) {
+            std::error_code ec;
+            bool existe = fs::exists(ruta, ec);
 
-    // Crear jobs.json solo si todavía no existe.
-    if (!fs::exists(archivoJobs, error)) {
-        if (error) {
-            throw std::runtime_error(
-                "No se pudo comprobar jobs.json: " + error.message()
-            );
-        }
+            if (ec) {
+                throw std::runtime_error(
+                    "No se pudo comprobar " + ruta.string()
+                );
+            }
 
-        std::ofstream archivo(archivoJobs);
+            if (!existe) {
+                std::ofstream archivo(ruta);
 
-        if (!archivo) {
-            throw std::runtime_error(
-                "No se pudo crear jobs.json"
-            );
-        }
+                if (!archivo) {
+                    throw std::runtime_error(
+                        "No se pudo crear " + ruta.string()
+                    );
+                }
 
-        archivo << "[]\n";
+                archivo << contenido;
 
-        if (!archivo) {
-            throw std::runtime_error(
-                "No se pudo inicializar jobs.json"
-            );
-        }
-    }
+                if (!archivo) {
+                    throw std::runtime_error(
+                        "No se pudo inicializar " + ruta.string()
+                    );
+                }
+            }
+        };
+
+    crearArchivoSiFalta(
+        directorio / "jobs.json",
+        "[]\n"
+    );
+
+    crearArchivoSiFalta(
+        directorio / "config.json",
+        "{\n    \"trabajos_maximos\": 5\n}\n"
+    );
+
+    crearArchivoSiFalta(
+        directorio / "jobs.lock",
+        ""
+    );
 
     return directorio.string();
 }
@@ -65,7 +85,9 @@ inline std::string inicializarDatos() {
 inline std::string rutaDatos(const std::string& nombreArchivo) {
     static const std::string directorio = inicializarDatos();
 
-    return (std::filesystem::path(directorio) / nombreArchivo).string();
+    return (
+        std::filesystem::path(directorio) / nombreArchivo
+    ).string();
 }
 
 } // namespace hermes
