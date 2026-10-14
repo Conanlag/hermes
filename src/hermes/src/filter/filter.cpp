@@ -1,6 +1,8 @@
 #include "filter.h"
 #include "job.h"
 #include "status.h"
+#include "data_paths.h"
+
 
 #include <fstream>
 #include <iostream>
@@ -12,7 +14,7 @@ using std::cout;
 using std::endl;
 using json = nlohmann::json;
 
-const string archivoJobs = "data/jobs.json"; // Ruta donde se lee el json con datos de jobs
+const string archivoJobs = hermes::rutaDatos("jobs.json");  // Ruta donde se lee el json con datos de jobs
 
 // ### Filtro por Id ###
 void filtrarPorId(unsigned int job_id){

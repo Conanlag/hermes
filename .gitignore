@@ -10,6 +10,8 @@
 /src/hermes/data/job_id
 /src/hermes/data/jobs.json
 
+/src/hermes/data.backup/
+
 
 # Object files
 *.o

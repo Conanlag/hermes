@@ -3,6 +3,7 @@
 #include "process.h"
 #include "terminal.colors.h"
 #include "timestamp.h"
+#include "data_paths.h"
 
 #include <fstream>
 #include <iostream>
@@ -26,8 +27,8 @@ using json = nlohmann::json;
 
 namespace {
 
-const string archivoJobs = "data/jobs.json";
-const string archivoConfiguracion = "data/config.json";
+const string archivoJobs = hermes::rutaDatos("jobs.json");
+const string archivoConfiguracion = hermes::rutaDatos("config.json");
 
 
 json leerJobs() {
@@ -473,8 +474,9 @@ void leerStderrProceso(
              * Evitar imprimir una línea vacía
              * como un error.
              */
-            if (!mensaje.empty()) {
-
+            if (
+                mensaje.find("No se pudo ejecutar el programa '") == 0
+            ) {
                 error(mensaje);
             }
 
@@ -490,10 +492,13 @@ void leerStderrProceso(
     /*
      * Puede quedar texto sin '\n' al final.
      */
-    if (!linea.empty()) {
-
+    if (
+        linea.find("No se pudo ejecutar el programa '") == 0
+    ) {
         error(linea);
     }
+
+
 
 
     close(pipeStderr);
