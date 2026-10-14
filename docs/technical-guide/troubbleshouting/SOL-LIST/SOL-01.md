@@ -26,7 +26,7 @@ Los siguientes comandos permiten configurar el enlace simbólico en un entorno L
 Desde la terminal, acceder al directorio que contiene el `Makefile` y la carpeta `data`:
 
 ```bash
-cd ~/proyecto/ppl/src/hermes
+cd ~/hermes/src/hermes
 ```
 
 La ruta debe adaptarse a la ubicación real del repositorio de cada desarrollador.
