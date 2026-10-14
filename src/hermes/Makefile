@@ -11,7 +11,7 @@ INSTALL_DIR = $(HOME)/.local/bin
 all: $(TARGET)
 
 $(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(SRC) -pthread -o $(TARGET)
 
 clean:
 	rm -f $(TARGET)

@@ -9,6 +9,9 @@
 #include "terminal.colors.h"
 #include "cancel.h"
 #include "help.h"
+#include "scheduler.h"
+#include <thread>
+#include <chrono>
 
 
 using std::cout;
@@ -40,6 +43,12 @@ int main(int argc, char* argv[]) {
     if (comando == "--help") {
         return mostrarAyuda();
     }
+    try {
+    iniciarSchedulerSiNecesario();
+    } catch (const std::exception& e) {
+        error("No se pudo iniciar el scheduler: ", e.what());
+        return 1;
+    }
 
     if (comando == "job") {
         if (argc < 3) {
@@ -62,10 +71,21 @@ int main(int argc, char* argv[]) {
         }
 
         Job job = crearJob(programa, argumentos);
-
+        // Esperar brevemente a que un trabajador asigne el PID.
+       for (int i = 0; i < 50 && job.pid == 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            obtenerJobPorId(job.job_id, job);
+        }
         cout << "job ID: " << job.job_id << endl;
+        if (job.pid > 0) {
         cout << "PID: " << job.pid << endl;
+        } else {
+        cout << "PID: pendiente (en cola)" << endl;
+        }
+
         return 0;
+
+        //aqui
     }
     if (comando == "cancel") {
 
