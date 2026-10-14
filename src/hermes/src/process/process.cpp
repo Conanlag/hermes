@@ -93,30 +93,39 @@ pid_t iniciarProceso(
     return pid;
 }
 
+
 bool esperarProceso(pid_t pid, int& codigoSalida) {
     int estado;
 
-    while (waitpid(pid, &estado, 0) == -1) {
-        if (errno == EINTR) {
-            continue;
+    while (true) {
+        pid_t resultado = waitpid(pid, &estado, 0);
+
+        if (resultado == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            codigoSalida = -1;
+            return false;
         }
 
-        return -1;
+        break;
     }
 
     if (WIFEXITED(estado)) {
         codigoSalida = WEXITSTATUS(estado);
-        return 0;
+        return true;
     }
 
     if (WIFSIGNALED(estado)) {
         codigoSalida = -WTERMSIG(estado);
-        return 0;
+        return true;
     }
 
     codigoSalida = -1;
-    return 0;
+    return false;
 }
+
 
 bool terminarProceso(pid_t pid) {
     if (kill(pid, SIGTERM) == 0) {
