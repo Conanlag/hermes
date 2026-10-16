@@ -74,9 +74,13 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
         // PID 0 significa que el trabajador todavía no ha guardado
         // el PID. El scheduler detectará la solicitud al guardarlo.
         if (pid > 0) {
-            // Si el proceso terminó justo antes de la señal,
-            // el scheduler actualizará el estado definitivo.
-            terminarProceso(pid);
+            if (!escalarCancelacionProceso(pid, 5)) {
+                return {
+                false,
+                CodigoCancelacion::ERROR_LECTURA,
+                "No se pudo completar la solicitud de cancelación."
+                };
+            }
         }
 
         return {

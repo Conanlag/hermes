@@ -44,6 +44,7 @@ bool esperarProceso(
 );
 
 
+
 /**
  * Envía SIGTERM a un proceso.
  *
@@ -54,5 +55,7 @@ bool esperarProceso(
 bool terminarProceso(
     pid_t pid
 );
+
+bool escalarCancelacionProceso(pid_t pid, int tiempoGraciaSegundos = 5);
 
 #endif

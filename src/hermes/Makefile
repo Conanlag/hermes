@@ -25,5 +25,6 @@ uninstall:
 
 test: $(TARGET)
 	@./tests/test.sh
+	@bash ./tests/test_rf26.sh 10
 
 .PHONY: all clean install uninstall test

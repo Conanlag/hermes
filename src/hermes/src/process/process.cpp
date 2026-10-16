@@ -6,6 +6,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <cerrno>
+#include <chrono>
+#include <thread>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -105,6 +107,35 @@ pid_t iniciarProceso(
 
     pipeStderr = pipefd[0];
     return pid;
+}
+bool escalarCancelacionProceso(pid_t pid, int tiempoGraciaSegundos) {
+    if (pid <= 0 || tiempoGraciaSegundos < 0) {
+        return false;
+    }
+
+    // Solicitar terminación normal.
+    if (kill(pid, SIGTERM) == -1 && errno != ESRCH) {
+        return false;
+    }
+
+    // Esperar el periodo de gracia sin recoger el proceso:
+    // waitpid() sigue siendo responsabilidad del trabajador.
+    for (int i = 0; i < tiempoGraciaSegundos * 10; ++i) {
+        if (kill(pid, 0) == -1 && errno == ESRCH) {
+            return true;
+        }
+
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(100)
+        );
+    }
+
+    // Si sigue existiendo, solicitar terminación forzada.
+    if (kill(pid, SIGKILL) == -1 && errno != ESRCH) {
+        return false;
+    }
+
+    return true;
 }
 
 bool esperarProceso(pid_t pid, int& codigoSalida) {
