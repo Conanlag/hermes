@@ -71,21 +71,38 @@ int main(int argc, char* argv[]) {
         }
 
         Job job = crearJob(programa, argumentos);
-        // Esperar brevemente a que un trabajador asigne el PID.
-       for (int i = 0; i < 50 && job.pid == 0; ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+        for (int i = 0; i < 50; ++i) {
             obtenerJobPorId(job.job_id, job);
+
+            if (job.pid > 0 || job.status == Status::FAILED) {
+                break;
+            }
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(20)
+            );
         }
+
         cout << "job ID: " << job.job_id << endl;
-        if (job.pid > 0) {
-        cout << "PID: " << job.pid << endl;
-        } else {
-        cout << "PID: pendiente (en cola)" << endl;
+
+        if (job.status == Status::FAILED) {
+            error(
+                job.mensajeError.empty()
+                    ? "No se pudo ejecutar el programa '" + programa + "'"
+                    : job.mensajeError
+            );
+
+            return 1;
         }
 
-        return 0;
+        if (job.pid > 0) {
+            cout << "PID: " << job.pid << endl;
+        } else {
+            cout << "PID: pendiente (en cola)" << endl;
+        }
 
-        //aqui
+        return 0;        
     }
     if (comando == "cancel") {
 

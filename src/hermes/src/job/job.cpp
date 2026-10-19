@@ -145,6 +145,7 @@ bool obtenerJobPorId(unsigned int jobId, Job& jobOut) {
                 item.value("status", string{"QUEUED"})
             );
             jobOut.codigoSalida = item.value("codigo_salida", -1);
+            jobOut.mensajeError = item.value("mensaje_error",string{});
             jobOut.tiempo_recepcion =
                 item.value("tiempo_recepcion", string{});
             jobOut.tiempo_inicio =

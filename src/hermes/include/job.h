@@ -26,6 +26,7 @@ struct Job {
     std::string tiempo_terminacion;
 
     int codigoSalida;
+    std::string mensajeError;
 };
 
 

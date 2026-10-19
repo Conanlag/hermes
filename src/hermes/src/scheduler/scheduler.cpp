@@ -7,10 +7,12 @@
 #include "data_paths.h"
 
 #include <chrono>
+#include <cerrno>
 #include <thread>
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <exception>
 
 #include <fcntl.h>
 #include <sys/file.h>
@@ -19,7 +21,9 @@
 #include <unistd.h>
 #include <signal.h>
 
+
 namespace {
+
 constexpr int NUM_TRABAJADORES = 5;
 
 struct TrabajoPendiente {
@@ -46,7 +50,9 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
             }
 
             trabajo.id = item["job_id"].get<unsigned int>();
-            trabajo.programa = item["programa"].get<std::string>();
+            trabajo.programa =
+                item["programa"].get<std::string>();
+
             trabajo.argumentos.clear();
 
             for (const auto& argumento : item["argumentos"]) {
@@ -60,6 +66,7 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
             item["status"] = "RUNNING";
             item["pid"] = 0;
             item["tiempo_inicio"] = obtenerFechaHoraActual();
+
             reservado = true;
             return true;
         }
@@ -70,30 +77,13 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
     return reservado;
 }
 
-bool cancelarSolicitado(unsigned int id) {
-    bool solicitado = false;
-
-    json jobs = leerJobsSeguros();
-
-    for (const auto& item : jobs) {
-        if (item.contains("job_id") &&
-            item["job_id"] == id &&
-            item.contains("cancel_requested") &&
-            item["cancel_requested"].is_boolean()) {
-            solicitado = item["cancel_requested"].get<bool>();
-            break;
-        }
-    }
-
-    return solicitado;
-}
-
 void guardarPid(unsigned int id, pid_t pid) {
     bool cancelar = false;
 
     modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
-            if (!item.contains("job_id") || item["job_id"] != id) {
+            if (!item.contains("job_id") ||
+                item["job_id"] != id) {
                 continue;
             }
 
@@ -103,9 +93,10 @@ void guardarPid(unsigned int id, pid_t pid) {
 
             item["pid"] = static_cast<int>(pid);
 
-            cancelar = item.contains("cancel_requested") &&
-                       item["cancel_requested"].is_boolean() &&
-                       item["cancel_requested"].get<bool>();
+            cancelar =
+                item.contains("cancel_requested") &&
+                item["cancel_requested"].is_boolean() &&
+                item["cancel_requested"].get<bool>();
 
             return true;
         }
@@ -114,16 +105,21 @@ void guardarPid(unsigned int id, pid_t pid) {
     });
 
     // Si se pidió cancelar antes de guardar el PID,
-    // terminamos el proceso tan pronto como conocemos su PID.
+    // terminar el proceso cuando su PID esté disponible.
     if (cancelar) {
         terminarProceso(pid);
     }
 }
 
-void finalizarTrabajo(unsigned int id, int codigoSalida, bool procesoValido) {
+void finalizarTrabajo(
+    unsigned int id,
+    int codigoSalida,
+    bool procesoValido
+) {
     modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
-            if (!item.contains("job_id") || item["job_id"] != id) {
+            if (!item.contains("job_id") ||
+                item["job_id"] != id) {
                 continue;
             }
 
@@ -141,7 +137,39 @@ void finalizarTrabajo(unsigned int id, int codigoSalida, bool procesoValido) {
             }
 
             item["codigo_salida"] = codigoSalida;
-            item["tiempo_terminacion"] = obtenerFechaHoraActual();
+            item["tiempo_terminacion"] =
+                obtenerFechaHoraActual();
+
+            return true;
+        }
+
+        return false;
+    });
+}
+
+void registrarFallo(
+    unsigned int id,
+    int codigoSalida,
+    const std::string& mensaje
+) {
+    modificarJobsSeguros([&](json& jobs) {
+        for (auto& item : jobs) {
+            if (!item.contains("job_id") ||
+                item["job_id"] != id) {
+                continue;
+            }
+
+            bool cancelar =
+                item.contains("cancel_requested") &&
+                item["cancel_requested"].is_boolean() &&
+                item["cancel_requested"].get<bool>();
+
+            item["status"] = cancelar ? "CANCELED" : "FAILED";
+            item["codigo_salida"] = codigoSalida;
+            item["mensaje_error"] = mensaje;
+            item["tiempo_terminacion"] =
+                obtenerFechaHoraActual();
+
             return true;
         }
 
@@ -162,6 +190,7 @@ void trabajador() {
             }
 
             int pipeStderr = -1;
+
             pid_t pid = iniciarProceso(
                 trabajo.programa,
                 trabajo.argumentos,
@@ -175,13 +204,21 @@ void trabajador() {
             char buffer[512];
 
             while (true) {
-                ssize_t n = read(pipeStderr, buffer, sizeof(buffer));
+                ssize_t n = read(
+                    pipeStderr,
+                    buffer,
+                    sizeof(buffer)
+                );
 
                 if (n == 0) {
                     break;
                 }
 
                 if (n < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+
                     break;
                 }
             }
@@ -191,18 +228,51 @@ void trabajador() {
             int codigoSalida = -1;
             bool valido = esperarProceso(pid, codigoSalida);
 
-            finalizarTrabajo(trabajo.id, codigoSalida, valido);
-        } catch (...) {
-            // Si falla el lanzamiento o la espera, se marca FAILED.
+            finalizarTrabajo(
+                trabajo.id,
+                codigoSalida,
+                valido
+            );
+
+        } catch (const std::exception& e) {
             if (trabajo.id != 0) {
                 try {
-                    actualizarResultadoJob(
+                    // posix_spawnp devuelve el error de lanzamiento
+                    // mediante una excepción. ENOENT corresponde a 127.
+                    const std::string mensaje = e.what();
+
+                    int codigoSalida =
+                        mensaje.find("No such file or directory") !=
+                        std::string::npos
+                        ? 127
+                        : -1;
+
+                    registrarFallo(
                         trabajo.id,
-                        Status::FAILED,
-                        -1
+                        codigoSalida,
+                        mensaje
                     );
                 } catch (...) {
-                    // No terminar el trabajador por un error de persistencia.
+                    // No terminar el trabajador por un error
+                    // al guardar el resultado.
+                }
+            }
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(200)
+            );
+
+        } catch (...) {
+            if (trabajo.id != 0) {
+                try {
+                    registrarFallo(
+                        trabajo.id,
+                        -1,
+                        "Error interno desconocido del scheduler"
+                    );
+                } catch (...) {
+                    // No terminar el trabajador por un error
+                    // al guardar el resultado.
                 }
             }
 
@@ -212,7 +282,8 @@ void trabajador() {
         }
     }
 }
-}
+
+} // namespace anónimo
 
 void ejecutarScheduler() {
     std::vector<std::thread> trabajadores;
@@ -238,10 +309,12 @@ void iniciarSchedulerSiNecesario() {
     );
 
     if (descriptor == -1) {
-        throw std::runtime_error("No se pudo abrir scheduler.lock");
+        throw std::runtime_error(
+            "No se pudo abrir scheduler.lock"
+        );
     }
 
-    // Si otro scheduler ya posee el bloqueo, no iniciamos otro.
+    // Si otro scheduler ya posee el bloqueo, no iniciar otro.
     if (flock(descriptor, LOCK_EX | LOCK_NB) == -1) {
         close(descriptor);
         return;
@@ -252,11 +325,14 @@ void iniciarSchedulerSiNecesario() {
     if (pid == -1) {
         flock(descriptor, LOCK_UN);
         close(descriptor);
-        throw std::runtime_error("No se pudo iniciar el scheduler");
+
+        throw std::runtime_error(
+            "No se pudo iniciar el scheduler"
+        );
     }
 
     if (pid > 0) {
-        // El proceso daemon conserva el descriptor y su bloqueo.
+        // El daemon conserva el bloqueo del archivo.
         close(descriptor);
         return;
     }
@@ -277,7 +353,9 @@ void iniciarSchedulerSiNecesario() {
         }
     }
 
-    // El descriptor de scheduler.lock permanece abierto en el daemon.
+    // El descriptor de scheduler.lock permanece abierto
+    // en el daemon durante la ejecución del scheduler.
     ejecutarScheduler();
+
     _exit(0);
 }
