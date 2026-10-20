@@ -1,7 +1,7 @@
+
 #include "validator.h"
 
 #include <stdexcept>
-
 
 // IMPORTANTE:
 // Actualizar esta lista cuando se agreguen nuevos comandos.
@@ -12,7 +12,8 @@ ResultadoValidacion validarComando(const string& comando) {
         return {
             false,
             CodigoValidacion::VACIO,
-            "Comando vacio. Comandos validos: job, filter, cancel, --version, --help"
+            "Comando vacio. Comandos validos: "
+            "job, filter, cancel, clean, --version, --help"
         };
     }
 
@@ -20,6 +21,7 @@ ResultadoValidacion validarComando(const string& comando) {
         comando == "job" ||
         comando == "filter" ||
         comando == "cancel" ||
+        comando == "clean" ||
         comando == "--version" ||
         comando == "--help"
     ) {
@@ -36,7 +38,8 @@ ResultadoValidacion validarComando(const string& comando) {
         CodigoValidacion::NO_AUTORIZADO,
         "Comando no reconocido: " +
         comando +
-        ". Comandos validos: job, filter, cancel, --version, --help"
+        ". Comandos validos: "
+        "job, filter, cancel, clean, --version, --help"
     };
 }
 
@@ -108,7 +111,8 @@ ResultadoValidacion validarIdTexto(
             "ID vacio. Debe proporcionar un ID numerico."
         };
     }
-    // Valida si solo los caracteres pertenecen a numeros enteros positivos
+
+    // Valida que solo contenga caracteres numéricos.
     for (char caracter : textoId) {
         if (caracter < '0' || caracter > '9') {
             return {
@@ -121,22 +125,16 @@ ResultadoValidacion validarIdTexto(
         }
     }
 
-
     try {
 
         size_t pos = 0;
 
-        unsigned long valor =
-            std::stoul(
-                textoId,
-                &pos
-            );
+        unsigned long valor = std::stoul(
+            textoId,
+            &pos
+        );
 
-
-        /*
-         * Verificar que todo el texto
-         * haya sido convertido.
-         */
+        // Verificar que todo el texto haya sido convertido.
         if (pos != textoId.size()) {
 
             return {
@@ -148,10 +146,7 @@ ResultadoValidacion validarIdTexto(
             };
         }
 
-
-        /*
-         * Los IDs de Hermes comienzan en 1.
-         */
+        // Los IDs de Hermes comienzan en 1.
         if (valor == 0) {
 
             return {
@@ -160,7 +155,6 @@ ResultadoValidacion validarIdTexto(
                 "ID mal formado: debe ser mayor a 0."
             };
         }
-
 
         return {
             true,
