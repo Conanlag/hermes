@@ -10,6 +10,8 @@
 #include "cancel.h"
 #include "help.h"
 #include "scheduler.h"
+#include "clean.h"
+
 #include <thread>
 #include <chrono>
 
@@ -43,6 +45,16 @@ int main(int argc, char* argv[]) {
     if (comando == "--help") {
         return mostrarAyuda();
     }
+    if (comando == "clean") {
+    if (argc != 3 || string(argv[2]) != "data") {
+        error("Uso: hermes clean data");
+        return 1;
+    }
+
+    return limpiarDatos();
+}
+
+
     try {
     iniciarSchedulerSiNecesario();
     } catch (const std::exception& e) {
