@@ -13,17 +13,22 @@
 #include <vector>
 #include <signal.h>
 
+using namespace std;
+using namespace std::this_thread;
+using namespace std::chrono;
+
+
 extern char** environ;
 
 pid_t iniciarProceso(
-    const std::string& programa,
-    const std::vector<std::string>& argumentos,
+    const string& programa,
+    const vector<string>& argumentos,
     int& pipeStderr
 ) {
     int pipefd[2];
 
     if (pipe(pipefd) == -1) {
-        throw std::runtime_error("No se pudo crear el pipe");
+        throw runtime_error("No se pudo crear el pipe");
     }
 
     posix_spawn_file_actions_t acciones;
@@ -33,7 +38,7 @@ pid_t iniciarProceso(
     if (error != 0) {
         close(pipefd[0]);
         close(pipefd[1]);
-        throw std::runtime_error(
+        throw runtime_error(
             "No se pudieron inicializar las acciones del proceso"
         );
     }
@@ -68,12 +73,12 @@ pid_t iniciarProceso(
 
     if (error != 0) {
         limpiar();
-        throw std::runtime_error(
+        throw runtime_error(
             "No se pudieron configurar los descriptores del proceso"
         );
     }
 
-    std::vector<char*> argv;
+    vector<char*> argv;
     argv.reserve(argumentos.size() + 2);
     argv.push_back(const_cast<char*>(programa.c_str()));
 
@@ -99,7 +104,7 @@ pid_t iniciarProceso(
 
     if (error != 0) {
         close(pipefd[0]);
-        throw std::runtime_error(
+        throw runtime_error(
             "No se pudo ejecutar el programa '" + programa +
             "': " + std::strerror(error)
         );
@@ -123,10 +128,8 @@ bool escalarCancelacionProceso(pid_t pid, int tiempoGraciaSegundos) {
     for (int i = 0; i < tiempoGraciaSegundos * 10; ++i) {
         if (kill(pid, 0) == -1 && errno == ESRCH) {
             return true;
-        }
-
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(100)
+        } sleep_for(
+            milliseconds(100)
         );
     }
 

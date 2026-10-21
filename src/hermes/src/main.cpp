@@ -16,11 +16,10 @@
 #include <chrono>
 
 
-using std::cout;
-using std::endl;
-using std::string;
-using std::vector;
-using std::cerr;
+using namespace std;
+using namespace std::this_thread;
+using namespace std::chrono;
+
 
 int main(int argc, char* argv[]) {
 
@@ -57,7 +56,7 @@ int main(int argc, char* argv[]) {
 
     try {
     iniciarSchedulerSiNecesario();
-    } catch (const std::exception& e) {
+    } catch (const exception& e) {
         error("No se pudo iniciar el scheduler: ", e.what());
         return 1;
     }
@@ -91,8 +90,8 @@ int main(int argc, char* argv[]) {
                 break;
             }
 
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(20)
+            sleep_for(
+                milliseconds(20)
             );
         }
 
@@ -133,7 +132,7 @@ int main(int argc, char* argv[]) {
 
     unsigned int id =
         static_cast<unsigned int>(
-            std::stoul(argv[2])
+            stoul(argv[2])
         );
 
     ResultadoCancelacion cr = cancelarJobDetallado(id);
@@ -186,7 +185,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Convertir str a uint (seguro, ya validado)
-            unsigned int id = static_cast<unsigned int>(std::stoul(argv[3]));
+            unsigned int id = static_cast<unsigned int>(stoul(argv[3]));
 
             filtrarPorId(id);
 

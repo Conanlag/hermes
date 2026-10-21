@@ -5,6 +5,8 @@
 #include "timestamp.h"
 
 #include <string>
+using namespace std;
+
 
 ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
     bool encontrado = false;
@@ -22,7 +24,7 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
                 }
 
                 encontrado = true;
-                estado = item.value("status", std::string{});
+                estado = item.value("status", string{});
 
                 if (estado == "QUEUED") {
                     item["status"] = "CANCELED";

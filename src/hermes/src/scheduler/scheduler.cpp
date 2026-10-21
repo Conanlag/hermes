@@ -21,6 +21,11 @@
 #include <unistd.h>
 #include <signal.h>
 
+using namespace std;
+using namespace std::this_thread;
+using namespace std::chrono;
+
+
 
 namespace {
 
@@ -28,8 +33,8 @@ constexpr int NUM_TRABAJADORES = 5;
 
 struct TrabajoPendiente {
     unsigned int id = 0;
-    std::string programa;
-    std::vector<std::string> argumentos;
+    string programa;
+    vector<std::string> argumentos;
 };
 
 bool reservarTrabajo(TrabajoPendiente& trabajo) {
@@ -51,14 +56,14 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
 
             trabajo.id = item["job_id"].get<unsigned int>();
             trabajo.programa =
-                item["programa"].get<std::string>();
+                item["programa"].get<string>();
 
             trabajo.argumentos.clear();
 
             for (const auto& argumento : item["argumentos"]) {
                 if (argumento.is_string()) {
                     trabajo.argumentos.push_back(
-                        argumento.get<std::string>()
+                        argumento.get<string>()
                     );
                 }
             }
@@ -150,7 +155,7 @@ void finalizarTrabajo(
 void registrarFallo(
     unsigned int id,
     int codigoSalida,
-    const std::string& mensaje
+    const string& mensaje
 ) {
     modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
@@ -183,8 +188,8 @@ void trabajador() {
 
         try {
             if (!reservarTrabajo(trabajo)) {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(200)
+                sleep_for(
+                    milliseconds(200)
                 );
                 continue;
             }
@@ -234,16 +239,16 @@ void trabajador() {
                 valido
             );
 
-        } catch (const std::exception& e) {
+        } catch (const exception& e) {
             if (trabajo.id != 0) {
                 try {
                     // posix_spawnp devuelve el error de lanzamiento
                     // mediante una excepción. ENOENT corresponde a 127.
-                    const std::string mensaje = e.what();
+                    const string mensaje = e.what();
 
                     int codigoSalida =
                         mensaje.find("No such file or directory") !=
-                        std::string::npos
+                        string::npos
                         ? 127
                         : -1;
 
@@ -258,8 +263,8 @@ void trabajador() {
                 }
             }
 
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(200)
+            sleep_for(
+            milliseconds(200)
             );
 
         } catch (...) {
@@ -276,8 +281,8 @@ void trabajador() {
                 }
             }
 
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(200)
+            sleep_for(
+                milliseconds(200)
             );
         }
     }
@@ -286,7 +291,7 @@ void trabajador() {
 } // namespace anónimo
 
 void ejecutarScheduler() {
-    std::vector<std::thread> trabajadores;
+    vector<thread> trabajadores;
     trabajadores.reserve(NUM_TRABAJADORES);
 
     for (int i = 0; i < NUM_TRABAJADORES; ++i) {
@@ -299,7 +304,7 @@ void ejecutarScheduler() {
 }
 
 void iniciarSchedulerSiNecesario() {
-    const std::string rutaLock =
+    const string rutaLock =
         hermes::rutaDatos("scheduler.lock");
 
     int descriptor = open(
@@ -309,7 +314,7 @@ void iniciarSchedulerSiNecesario() {
     );
 
     if (descriptor == -1) {
-        throw std::runtime_error(
+        throw runtime_error(
             "No se pudo abrir scheduler.lock"
         );
     }
@@ -326,7 +331,7 @@ void iniciarSchedulerSiNecesario() {
         flock(descriptor, LOCK_UN);
         close(descriptor);
 
-        throw std::runtime_error(
+        throw runtime_error(
             "No se pudo iniciar el scheduler"
         );
     }

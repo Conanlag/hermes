@@ -3,6 +3,8 @@
 
 #include <stdexcept>
 
+using namespace std;
+
 // IMPORTANTE:
 // Actualizar esta lista cuando se agreguen nuevos comandos.
 ResultadoValidacion validarComando(const string& comando) {

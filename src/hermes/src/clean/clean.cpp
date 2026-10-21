@@ -5,6 +5,8 @@
 
 #include <string>
 
+using namespace std;
+
 int limpiarDatos() {
     bool hayTrabajosActivos = false;
 
@@ -13,7 +15,7 @@ int limpiarDatos() {
             [&](json& jobs) {
                 // No limpiar si existen trabajos pendientes o ejecutándose.
                 for (const auto& job : jobs) {
-                    std::string status =
+                    string status =
                         job.value("status", std::string{});
 
                     if (status == "QUEUED" || status == "RUNNING") {
@@ -44,7 +46,7 @@ int limpiarDatos() {
         info("Historial de trabajos limpiado correctamente.");
         return 0;
 
-    } catch (const std::exception& e) {
+    } catch (const exception& e) {
         error("Error al limpiar los datos: ", e.what());
         return 1;
     }

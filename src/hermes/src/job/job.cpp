@@ -8,6 +8,9 @@
 #include <stdexcept>
 #include <string>
 
+using namespace std;
+
+
 namespace {
 unsigned int siguienteId(const json& jobs) {
     unsigned int siguiente = 1;
@@ -22,7 +25,7 @@ unsigned int siguienteId(const json& jobs) {
 
         if (id >= siguiente) {
             if (id == UINT32_MAX) {
-                throw std::runtime_error("Se agotaron los IDs disponibles");
+                throw runtime_error("Se agotaron los IDs disponibles");
             }
             siguiente = id + 1;
         }
@@ -33,7 +36,7 @@ unsigned int siguienteId(const json& jobs) {
 
 bool actualizarCampo(
     unsigned int id,
-    const std::function<bool(json&)>& actualizar
+    const function<bool(json&)>& actualizar
 ) {
     try {
         return modificarJobsSeguros([&](json& jobs) {
@@ -85,7 +88,7 @@ Job crearJob(
     });
 
     if (!guardado) {
-        throw std::runtime_error("No se pudo registrar el trabajo");
+        throw runtime_error("No se pudo registrar el trabajo");
     }
 
     return nuevo;

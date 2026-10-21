@@ -12,6 +12,9 @@
 #include <cstdint>
 
 
+using namespace std;
+
+
 namespace {
 std::mutex mutexStorage;
 
@@ -22,13 +25,13 @@ public:
         descriptor = open(ruta.c_str(), O_RDWR | O_CREAT, 0644);
 
         if (descriptor == -1) {
-            throw std::runtime_error("No se pudo abrir jobs.lock");
+            throw runtime_error("No se pudo abrir jobs.lock");
         }
 
         if (flock(descriptor, LOCK_EX) == -1) {
             close(descriptor);
             descriptor = -1;
-            throw std::runtime_error("No se pudo bloquear jobs.lock");
+            throw runtime_error("No se pudo bloquear jobs.lock");
         }
     }
 
@@ -44,37 +47,37 @@ public:
 
 private:
     int descriptor = -1;
-    std::string ruta;
+    string ruta;
 };
 
 json leerSinBloqueo() {
-    std::ifstream archivo(hermes::rutaDatos("jobs.json"));
+    ifstream archivo(hermes::rutaDatos("jobs.json"));
 
     if (!archivo.is_open()) {
-        throw std::runtime_error("No se pudo abrir jobs.json");
+        throw runtime_error("No se pudo abrir jobs.json");
     }
 
     json jobs;
     archivo >> jobs;
 
     if (!jobs.is_array()) {
-        throw std::runtime_error("jobs.json no contiene un arreglo");
+        throw runtime_error("jobs.json no contiene un arreglo");
     }
 
     return jobs;
 }
 
 void guardarAtomico(const json& jobs) {
-    const std::string ruta = hermes::rutaDatos("jobs.json");
-    const std::string temporal =
-        ruta + ".tmp." + std::to_string(getpid()) + "." +
-        std::to_string(reinterpret_cast<std::uintptr_t>(&jobs));
+    const string ruta = hermes::rutaDatos("jobs.json");
+    const string temporal =
+        ruta + ".tmp." + to_string(getpid()) + "." +
+        to_string(reinterpret_cast<std::uintptr_t>(&jobs));
 
     {
-        std::ofstream archivo(temporal, std::ios::trunc);
+        ofstream archivo(temporal, ios::trunc);
 
         if (!archivo.is_open()) {
-            throw std::runtime_error("No se pudo crear el archivo temporal");
+            throw runtime_error("No se pudo crear el archivo temporal");
         }
 
         archivo << jobs.dump(4) << '\n';
@@ -83,25 +86,25 @@ void guardarAtomico(const json& jobs) {
         if (!archivo.good()) {
             archivo.close();
             unlink(temporal.c_str());
-            throw std::runtime_error("No se pudo escribir el archivo temporal");
+            throw runtime_error("No se pudo escribir el archivo temporal");
         }
     }
 
     if (rename(temporal.c_str(), ruta.c_str()) == -1) {
         unlink(temporal.c_str());
-        throw std::runtime_error("No se pudo actualizar jobs.json");
+        throw runtime_error("No se pudo actualizar jobs.json");
     }
 }
 }
 
 json leerJobsSeguros() {
-    std::lock_guard<std::mutex> guardia(mutexStorage);
+    lock_guard<std::mutex> guardia(mutexStorage);
     BloqueoArchivo bloqueo;
     return leerSinBloqueo();
 }
 
 bool modificarJobsSeguros(const std::function<bool(json&)>& funcion) {
-    std::lock_guard<std::mutex> guardia(mutexStorage);
+    lock_guard<std::mutex> guardia(mutexStorage);
     BloqueoArchivo bloqueo;
 
     json jobs = leerSinBloqueo();
