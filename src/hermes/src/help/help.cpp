@@ -12,7 +12,8 @@ int mostrarAyuda() {
     cout << endl;
 
     cout << "Comandos:" << endl;
-    cout << "  job <programa> [argumentos..]  Crea un trabajo y devuelve su ID" << endl;
+    cout << "  job [--request-id <id>] <programa> [argumentos..]" << endl;
+    cout << "                                 Crea un trabajo; el ID de solicitud evita duplicados" << endl;
     cout << "  filter id <numero>             Muestra un trabajo por su ID" << endl;
     cout << "  filter status <ESTADO>         Lista trabajos por estado" << endl;
     cout << "  filter programa <nombre>       Lista trabajos por programa" << endl;
@@ -27,6 +28,7 @@ int mostrarAyuda() {
 
     cout << "Ejemplos:" << endl;
     cout << "  hermes job sleep 30" << endl;
+    cout << "  hermes job --request-id pago-42 sleep 30" << endl;
     cout << "  hermes filter id 1" << endl;
     cout << "  hermes filter status RUNNING" << endl;
     cout << "  hermes cancel 1" << endl;

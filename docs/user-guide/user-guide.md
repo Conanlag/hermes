@@ -227,6 +227,7 @@ El comando `job` permite crear un nuevo Job y ejecutar un programa con sus argum
 
 ```bash
 hermes job <programa> [argumentos...]
+hermes job --request-id <id> <programa> [argumentos...]
 ```
 
 ### Ejemplo
@@ -242,6 +243,16 @@ Otro ejemplo:
 ```bash
 hermes job echo Hola
 ```
+
+Si el cliente puede reenviar una solicitud, puede proporcionar un identificador estable:
+
+```bash
+hermes job --request-id pago-42 sleep 30
+```
+
+Si se reenvia el mismo identificador con el mismo programa y argumentos, Hermes devuelve el ID del Job existente y no lo ejecuta de nuevo. Si se reutiliza el identificador con otro programa o argumentos, la solicitud se rechaza. El identificador admite hasta 128 caracteres: letras, numeros, punto, guion, guion bajo y dos puntos.
+
+La deduplicacion solo se aplica cuando se especifica `--request-id`; sin esa opcion, cada invocacion crea un Job nuevo. La clave se conserva mientras el registro exista en `jobs.json`; al limpiar Jobs finalizados con `hermes clean data`, se elimina tambien su clave.
 
 Al crear un Job, Hermes asigna un identificador y administra su estado durante el ciclo de ejecución.
 

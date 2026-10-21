@@ -53,8 +53,45 @@ ResultadoValidacion validarPrograma(const string& programa) {
         return {
             false,
             CodigoValidacion::VACIO,
-            "Programa vacio. Uso: hermes job <programa> [argumentos..]"
+            "Programa vacio. Uso: hermes job "
+            "[--request-id <id>] <programa> [argumentos..]"
         };
+    }
+
+    return {
+        true,
+        CodigoValidacion::OK,
+        ""
+    };
+}
+
+ResultadoValidacion validarRequestId(const string& requestId) {
+    if (requestId.empty() || requestId.size() > 128) {
+        return {
+            false,
+            CodigoValidacion::MALFORMADO,
+            "El identificador de solicitud debe tener entre 1 y 128 caracteres."
+        };
+    }
+
+    for (unsigned char caracter : requestId) {
+        const bool valido =
+            (caracter >= 'a' && caracter <= 'z') ||
+            (caracter >= 'A' && caracter <= 'Z') ||
+            (caracter >= '0' && caracter <= '9') ||
+            caracter == '-' ||
+            caracter == '_' ||
+            caracter == '.' ||
+            caracter == ':';
+
+        if (!valido) {
+            return {
+                false,
+                CodigoValidacion::MALFORMADO,
+                "El identificador de solicitud solo admite letras, "
+                "numeros, punto, guion y guion bajo."
+            };
+        }
     }
 
     return {

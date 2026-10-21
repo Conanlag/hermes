@@ -27,6 +27,7 @@
 | RF-22    |                     |             |          |           |             | Pendiente   |                     |
 | RF-23    |                     |             |          |           |             | Pendiente   |                     |
 | RF-24    |                     |             |          |           |             | Pendiente   |                     |
+| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | src/hermes/tests/test_rf27.sh ([PASS]) | PASS | - |
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | ConstrucciÃ³n reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |

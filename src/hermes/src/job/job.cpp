@@ -56,7 +56,8 @@ bool actualizarCampo(
 
 Job crearJob(
     const string& programa,
-    const vector<string>& argumentos
+    const vector<string>& argumentos,
+    const string& requestId
 ) {
     Job nuevo{};
     nuevo.pid = 0;
@@ -68,7 +69,52 @@ Job crearJob(
     nuevo.tiempo_terminacion = "";
     nuevo.codigoSalida = -1;
 
+    bool solicitudExistente = false;
     bool guardado = modificarJobsSeguros([&](json& jobs) {
+        if (!requestId.empty()) {
+            for (const auto& item : jobs) {
+                if (!item.contains("request_id") ||
+                    !item["request_id"].is_string() ||
+                    item["request_id"].get<string>() != requestId) {
+                    continue;
+                }
+
+                if (solicitudExistente) {
+                    throw runtime_error(
+                        "El identificador de solicitud ya tiene varios Jobs"
+                    );
+                }
+
+                if (item.value("programa", string{}) != programa ||
+                    item.value("argumentos", vector<string>{}) != argumentos) {
+                    throw runtime_error(
+                        "El identificador de solicitud ya fue usado "
+                        "con otro programa o argumentos"
+                    );
+                }
+
+                nuevo.job_id = item.value("job_id", 0U);
+                nuevo.pid = item.value("pid", 0);
+                nuevo.status = statusDesdeTexto(
+                    item.value("status", string{"QUEUED"})
+                );
+                nuevo.tiempo_recepcion =
+                    item.value("tiempo_recepcion", string{});
+                nuevo.tiempo_inicio =
+                    item.value("tiempo_inicio", string{});
+                nuevo.tiempo_terminacion =
+                    item.value("tiempo_terminacion", string{});
+                nuevo.codigoSalida = item.value("codigo_salida", -1);
+                nuevo.mensajeError = item.value("mensaje_error", string{});
+                nuevo.solicitudDuplicada = true;
+                solicitudExistente = true;
+            }
+        }
+
+        if (solicitudExistente) {
+            return false;
+        }
+
         nuevo.job_id = siguienteId(jobs);
 
         json item;
@@ -82,12 +128,15 @@ Job crearJob(
         item["tiempo_terminacion"] = "";
         item["codigo_salida"] = -1;
         item["cancel_requested"] = false;
+        if (!requestId.empty()) {
+            item["request_id"] = requestId;
+        }
 
         jobs.push_back(item);
         return true;
     });
 
-    if (!guardado) {
+    if (!guardado && !solicitudExistente) {
         throw runtime_error("No se pudo registrar el trabajo");
     }
 
