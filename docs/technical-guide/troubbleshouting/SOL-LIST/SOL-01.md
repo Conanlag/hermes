@@ -69,10 +69,10 @@ ls -la data
 La ruta resuelta debe apuntar al directorio:
 
 ```text
-/home/usuario/.local/share/hermes/data
+$HOME/.local/share/hermes/data
 ```
 
-Dentro de `data` deben estar disponibles `jobs.json` y `config.json`.
+Dentro de `data` Hermes crea y mantiene `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`. `jobs.json` guarda los Jobs; `config.json` contiene la configuración inicial `trabajos_maximos: 5` (actualmente no se lee para configurar el scheduler); `jobs.lock` coordina las escrituras concurrentes; y `scheduler.lock` evita iniciar más de un scheduler a la vez.
 
 ## Configuración del código fuente
 
@@ -134,7 +134,7 @@ Finalmente, revisar el archivo de persistencia:
 cat "$HOME/.local/share/hermes/data/jobs.json"
 ```
 
-Los cambios realizados por Hermes deben reflejarse también en `hermes/src/hermes/data/jobs.json` a través del enlace simbólico.
+Los cambios realizados por Hermes en `$HOME/.local/share/hermes/data/jobs.json` también son visibles en `hermes/src/hermes/data/jobs.json` a través del enlace simbólico.
 
 ## Verificación de la solución
 
@@ -144,12 +144,12 @@ Los cambios realizados por Hermes deben reflejarse también en `hermes/src/herme
 | Ejecutar `hermes job sleep 30` desde otra ubicación | El trabajo se registra sin depender del directorio actual |
 | Ejecutar `hermes filter` desde otra ubicación | Se consultan los mismos datos persistentes |
 | Ejecutar `hermes cancel ID` desde otra ubicación | Se intenta cancelar el trabajo correspondiente |
-| Revisar `hermes/src/hermes/data/jobs.json` | Se observan los cambios realizados por Hermes |
+| Revisar `$HOME/.local/share/hermes/data/jobs.json` o `hermes/src/hermes/data/jobs.json` | Se observan los mismos cambios gracias al enlace simbólico |
 | Reiniciar la terminal o WSL | El enlace simbólico continúa disponible |
 
 ## Resultado esperado
 
-Hermes puede ejecutarse desde cualquier directorio, siempre que esté correctamente instalado y que los módulos utilicen las rutas centralizadas. Los datos se conservan en `~/.local/share/hermes/data`, mientras que los desarrolladores pueden visualizarlos directamente desde `hermes/src/hermes/data`.
+Hermes puede ejecutarse desde cualquier directorio, siempre que esté correctamente instalado y que los módulos utilicen las rutas centralizadas. Los datos se conservan en `$HOME/.local/share/hermes/data`, mientras que los desarrolladores pueden visualizarlos directamente desde `hermes/src/hermes/data`, que es un enlace simbólico a la ruta persistente.
 
 La configuración no requiere montar directorios mediante `sudo mount --bind`, ni modificar los permisos para permitir el acceso a otros usuarios. Cada desarrollador configura su propio directorio de datos y su enlace simbólico.
 

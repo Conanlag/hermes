@@ -44,11 +44,13 @@ hermes/
 │       ├── job.h
 │       └── ...
 ├── data/
-│   └── jobs.json
+│   └── -> $HOME/.local/share/hermes/data/
 └── Makefile
 ```
 
 Esto significa que Hermes no depende de que `nlohmann/json` esté instalado globalmente en el sistema operativo.
+
+El directorio `src/hermes/data` mostrado en el árbol es un enlace simbólico a `$HOME/.local/share/hermes/data/`, donde se mantienen `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`.
 
 Por lo tanto, no es necesario instalar el paquete mediante el administrador de paquetes del sistema, por ejemplo:
 

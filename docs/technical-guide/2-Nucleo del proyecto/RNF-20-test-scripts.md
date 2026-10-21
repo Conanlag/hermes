@@ -54,7 +54,7 @@ Las pruebas automatizadas se encuentran organizadas de la siguiente manera:
 ```text
 hermes/
 ├── Makefile
-├── data/
+├── data/ -> $HOME/.local/share/hermes/data/
 ├── include/
 ├── src/
 └── tests/
@@ -62,6 +62,8 @@ hermes/
 ```
 
 El archivo `test.sh` contiene el conjunto de pruebas automatizadas y las funciones necesarias para ejecutarlas y comprobar sus resultados.
+
+El enlace `data/` permite que las pruebas y el código del repositorio accedan a la persistencia real de Hermes, ubicada en `$HOME/.local/share/hermes/data/`. Ahí se encuentran `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`.
 
 Antes de ejecutar las pruebas por primera vez, es necesario otorgar permiso de ejecución al script mediante:
 

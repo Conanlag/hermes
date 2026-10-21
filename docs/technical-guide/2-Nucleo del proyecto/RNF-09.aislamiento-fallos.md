@@ -33,7 +33,7 @@ Comando de construcción usado: `g++ -Wall -Wextra -std=c++17 -Iinclude src/canc
 - `src/process/process.cpp` (`iniciarProceso` con `fork`/`execvp`/`_exit(127)`, `esperarProceso` con `waitpid` específico, `terminarProceso` con `kill/SIGTERM`).
 - `src/job/job.cpp` (supervisor por Job en `supervisarJob`, `leerStderrProceso` con pipe propio, `modificarJobs` con `flock`, `leerJobs` tolerante).
 - `src/filter/filter.cpp` (consultas de solo lectura; no modifican estado).
-- `data/jobs.json` (estado compartido solo bajo lock).
+- `$HOME/.local/share/hermes/data/jobs.json` (estado compartido solo bajo lock; accesible desde el enlace `src/hermes/data/jobs.json`).
 
 ---
 

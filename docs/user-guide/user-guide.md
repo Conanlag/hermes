@@ -177,7 +177,35 @@ Si la instalación fue correcta, se mostrará la versión actual de Hermes.
 
 ---
 
-# 6. Comandos disponibles
+# 6. Dónde se guardan los datos
+
+Hermes guarda sus datos persistentes en:
+
+```text
+$HOME/.local/share/hermes/data/
+```
+
+Al ejecutar Hermes por primera vez, se crean el directorio y los archivos que falten. En el repositorio, `src/hermes/data` es un enlace simbólico hacia esa carpeta, así que los archivos visibles allí son los mismos que usa el programa.
+
+| Archivo | Para qué sirve |
+| ------- | -------------- |
+| `jobs.json` | Guarda los Jobs creados y sus datos, como ID, programa, argumentos, estado y resultado. |
+| `config.json` | Contiene la configuración inicial `trabajos_maximos: 5`. Actualmente Hermes crea este valor, pero todavía no lo usa para ajustar la cantidad de trabajos simultáneos. |
+| `jobs.lock` | Archivo interno para coordinar escrituras simultáneas en los datos de Jobs. No se debe borrar mientras Hermes está trabajando. |
+| `scheduler.lock` | Archivo interno que permite detectar si ya está activo el scheduler de Hermes. No se debe borrar mientras Hermes está trabajando. |
+
+Desde la raíz del repositorio puedes comprobar el destino del enlace simbólico; desde cualquier ubicación puedes listar los datos persistentes:
+
+```bash
+readlink -f src/hermes/data
+ls -la "$HOME/.local/share/hermes/data"
+```
+
+`jobs.json`, `config.json` y `jobs.lock` se inicializan al usar las rutas de datos; `scheduler.lock` se crea cuando se inicia el scheduler. No es necesario editar ni crear estos archivos manualmente para usar Hermes.
+
+---
+
+# 7. Comandos disponibles
 
 Hermes cuenta actualmente con los siguientes comandos:
 
@@ -191,7 +219,7 @@ hermes --help
 
 ---
 
-## 6.1 Hermes Job
+## 7.1 Hermes Job
 
 El comando `job` permite crear un nuevo Job y ejecutar un programa con sus argumentos.
 
@@ -229,7 +257,7 @@ CANCELED
 
 ---
 
-## 6.2 Hermes Filter
+## 7.2 Hermes Filter
 
 El comando `filter` permite buscar Jobs utilizando diferentes criterios:
 
@@ -265,7 +293,7 @@ El filtro permite consultar los Jobs almacenados en Hermes que coincidan con el 
 
 ---
 
-## 6.3 Hermes Cancel
+## 7.3 Hermes Cancel
 
 El comando `cancel` permite solicitar la cancelación de un Job.
 
@@ -285,7 +313,7 @@ El Job correspondiente será marcado como cancelado de acuerdo con su estado y c
 
 ---
 
-## 6.4 Hermes --version
+## 7.4 Hermes --version
 
 Permite consultar la versión instalada de Hermes.
 
@@ -304,7 +332,7 @@ Hermes version ...
 
 ---
 
-## 6.5 Hermes --help
+## 7.5 Hermes --help
 
 Muestra la ayuda de uso con todos los comandos, estados, ejemplos y códigos de salida.
 
@@ -329,7 +357,7 @@ Si no recuerdas un comando, empieza siempre por aquí.
 
 ---
 
-# 7. Flujo básico de uso
+# 8. Flujo básico de uso
 
 Una vez instalado Hermes, un flujo básico puede ser:
 

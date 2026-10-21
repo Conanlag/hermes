@@ -12,6 +12,8 @@ El mecanismo seleccionado también debía permitir que el proyecto pudiera ejecu
 
 Se utilizará **JSON como formato de persistencia**, mediante un archivo `jobs.json` ubicado dentro del directorio `data/`.
 
+**Ubicación vigente:** Hermes conserva sus datos en `$HOME/.local/share/hermes/data/`. La carpeta `src/hermes/data` del repositorio es un enlace simbólico a esa ruta. Además de `jobs.json`, el directorio contiene `config.json`, `jobs.lock` y `scheduler.lock`; estos archivos auxiliares y su función se documentan en la [guía técnica](../technical-guide/2-Nucleo%20del%20proyecto/Estructura%20del%20proyecto.md#directorio-de-datos-persistentes).
+
 La estructura actual de cada job será:
 
 ```json

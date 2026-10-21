@@ -4,7 +4,7 @@
 
 Hermes debe permitir al usuario enviar un programa junto con sus argumentos y obtener un identificador único que permita identificar posteriormente el trabajo solicitado.
 
-El sistema recibe el comando, almacena el programa y sus argumentos dentro de una estructura `Job`, genera un identificador único y persiste la información en `data/jobs.json`. 
+El sistema recibe el comando, almacena el programa y sus argumentos dentro de una estructura `Job`, genera un identificador único y persiste la información en `$HOME/.local/share/hermes/data/jobs.json`. En el repositorio, `src/hermes/data` es un enlace simbólico al directorio de datos del usuario.
 
 La creación de un Job constituye la base para posteriormente implementar la ejecución de procesos, el control de estados, la concurrencia y la cancelación.
 
@@ -61,12 +61,12 @@ job.cpp
    └── Guardar Job
           │
           ▼
-     data/jobs.json
+     $HOME/.local/share/hermes/data/jobs.json
 ```
 
 El identificador se obtendrá recorriendo los Jobs existentes y buscando el ID más alto. El siguiente Job utilizará el valor siguiente. Por ejemplo, si existen los IDs `1` y `5`, el nuevo Job recibirá el ID `6`. 
 
-La información del Job será almacenada en `data/jobs.json`, permitiendo conservar los trabajos después de finalizar la ejecución del programa Hermes. 
+La información del Job se almacena en `$HOME/.local/share/hermes/data/jobs.json`, permitiendo conservar los trabajos después de finalizar la ejecución del programa Hermes. Desde el repositorio, el mismo archivo se puede consultar en `src/hermes/data/jobs.json` mediante el enlace simbólico.
 
 La ejecución real del programa queda fuera del alcance de esta implementación. En esta etapa, Hermes solamente recibe, identifica y almacena el Job.
 
@@ -76,4 +76,3 @@ La ejecución real del programa queda fuera del alcance de esta implementación.
 | Consecuencias     | Hermes puede recibir comandos con argumentos, generar identificadores únicos y conservar los Jobs entre diferentes ejecuciones del programa. La ejecución del programa y el control completo de su ciclo de vida quedan pendientes para etapas posteriores.                                             |
 | Riesgos           | Si `jobs.json` se elimina o se encuentra corrupto, Hermes puede perder el historial necesario para determinar el siguiente identificador. Además, buscar el ID recorriendo todos los Jobs puede resultar menos eficiente cuando exista una cantidad muy grande de registros.                            |
 | Evidencia técnica | `crearJob()` lee `data/jobs.json`, determina el siguiente identificador, crea el objeto `Job`, almacena el programa y sus argumentos, agrega el registro al arreglo JSON y vuelve a escribir el archivo. El módulo no ejecuta el programa recibido.                                                     |
-
