@@ -8,6 +8,6 @@ using std::cout;
 using std::endl;
 
 int version() { 
-    info("version 0.1");
+    info("version 0.2");
     return 0;
 }

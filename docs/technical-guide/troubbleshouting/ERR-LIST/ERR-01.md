@@ -22,7 +22,7 @@ Aborted (core dumped)
 1. Dejar de guardar jobs.json dentro del proyecto y que lo guarde en el directorio de datos del usuario.
 El programa detecta automaticamente `$HOME`:
 ```
-$HOME/.local/share/hermes/jobs.json
+$HOME/.local/share/hermes/data/jobs.json
 ```
 sin embargo esta solucion mientras estamos en la etapa de desarrollo dificultara la visualizacion de los procesos.
 
@@ -31,3 +31,7 @@ sin embargo esta solucion mientras estamos en la etapa de desarrollo dificultara
 sudo mount --bind /home/leo/proyecto/hermes/hermes-bin /home/leo/.local/bin
 ```
 ayudara a ver los datos de jobs.json pero esto no puede ser posible para el usuario final. Solo para desarrolladores.
+
+## Estado actual
+
+La ubicación persistente vigente es `$HOME/.local/share/hermes/data/`. En el árbol del proyecto, `src/hermes/data` es un enlace simbólico a ese directorio. Ahí Hermes mantiene `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`; sus funciones se explican en la guía técnica de [Estructura del proyecto](../../2-Nucleo%20del%20proyecto/Estructura%20del%20proyecto.md#directorio-de-datos-persistentes).

@@ -26,12 +26,15 @@ struct Job {
     std::string tiempo_terminacion;
 
     int codigoSalida;
+    std::string mensajeError;
+    bool solicitudDuplicada = false;
 };
 
 
 Job crearJob(
     const string& programa,
-    const vector<string>& argumentos
+    const vector<string>& argumentos,
+    const string& requestId = ""
 );
 
 

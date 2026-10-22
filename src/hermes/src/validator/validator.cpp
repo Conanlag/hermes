@@ -1,7 +1,9 @@
+
 #include "validator.h"
 
 #include <stdexcept>
 
+using namespace std;
 
 // IMPORTANTE:
 // Actualizar esta lista cuando se agreguen nuevos comandos.
@@ -12,7 +14,8 @@ ResultadoValidacion validarComando(const string& comando) {
         return {
             false,
             CodigoValidacion::VACIO,
-            "Comando vacio. Comandos validos: job, filter, cancel, --version, --help"
+            "Comando vacio. Comandos validos: "
+            "job, filter, cancel, clean, --version, --help"
         };
     }
 
@@ -20,6 +23,7 @@ ResultadoValidacion validarComando(const string& comando) {
         comando == "job" ||
         comando == "filter" ||
         comando == "cancel" ||
+        comando == "clean" ||
         comando == "--version" ||
         comando == "--help"
     ) {
@@ -36,7 +40,8 @@ ResultadoValidacion validarComando(const string& comando) {
         CodigoValidacion::NO_AUTORIZADO,
         "Comando no reconocido: " +
         comando +
-        ". Comandos validos: job, filter, cancel, --version, --help"
+        ". Comandos validos: "
+        "job, filter, cancel, clean, --version, --help"
     };
 }
 
@@ -48,8 +53,45 @@ ResultadoValidacion validarPrograma(const string& programa) {
         return {
             false,
             CodigoValidacion::VACIO,
-            "Programa vacio. Uso: hermes job <programa> [argumentos..]"
+            "Programa vacio. Uso: hermes job "
+            "[--request-id <id>] <programa> [argumentos..]"
         };
+    }
+
+    return {
+        true,
+        CodigoValidacion::OK,
+        ""
+    };
+}
+
+ResultadoValidacion validarRequestId(const string& requestId) {
+    if (requestId.empty() || requestId.size() > 128) {
+        return {
+            false,
+            CodigoValidacion::MALFORMADO,
+            "El identificador de solicitud debe tener entre 1 y 128 caracteres."
+        };
+    }
+
+    for (unsigned char caracter : requestId) {
+        const bool valido =
+            (caracter >= 'a' && caracter <= 'z') ||
+            (caracter >= 'A' && caracter <= 'Z') ||
+            (caracter >= '0' && caracter <= '9') ||
+            caracter == '-' ||
+            caracter == '_' ||
+            caracter == '.' ||
+            caracter == ':';
+
+        if (!valido) {
+            return {
+                false,
+                CodigoValidacion::MALFORMADO,
+                "El identificador de solicitud solo admite letras, "
+                "numeros, punto, guion y guion bajo."
+            };
+        }
     }
 
     return {
@@ -109,21 +151,29 @@ ResultadoValidacion validarIdTexto(
         };
     }
 
+    // Valida que solo contenga caracteres numéricos.
+    for (char caracter : textoId) {
+        if (caracter < '0' || caracter > '9') {
+            return {
+                false,
+                CodigoValidacion::MALFORMADO,
+                "ID mal formado: " +
+                textoId +
+                ". Debe ser un numero entero positivo."
+            };
+        }
+    }
+
     try {
 
         size_t pos = 0;
 
-        unsigned long valor =
-            std::stoul(
-                textoId,
-                &pos
-            );
+        unsigned long valor = std::stoul(
+            textoId,
+            &pos
+        );
 
-
-        /*
-         * Verificar que todo el texto
-         * haya sido convertido.
-         */
+        // Verificar que todo el texto haya sido convertido.
         if (pos != textoId.size()) {
 
             return {
@@ -135,10 +185,7 @@ ResultadoValidacion validarIdTexto(
             };
         }
 
-
-        /*
-         * Los IDs de Hermes comienzan en 1.
-         */
+        // Los IDs de Hermes comienzan en 1.
         if (valor == 0) {
 
             return {
@@ -147,7 +194,6 @@ ResultadoValidacion validarIdTexto(
                 "ID mal formado: debe ser mayor a 0."
             };
         }
-
 
         return {
             true,

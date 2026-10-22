@@ -9,13 +9,17 @@
 #include "terminal.colors.h"
 #include "cancel.h"
 #include "help.h"
+#include "scheduler.h"
+#include "clean.h"
+
+#include <thread>
+#include <chrono>
 
 
-using std::cout;
-using std::endl;
-using std::string;
-using std::vector;
-using std::cerr;
+using namespace std;
+using namespace std::this_thread;
+using namespace std::chrono;
+
 
 int main(int argc, char* argv[]) {
 
@@ -40,14 +44,55 @@ int main(int argc, char* argv[]) {
     if (comando == "--help") {
         return mostrarAyuda();
     }
+    if (comando == "clean") {
+    if (argc != 3 || string(argv[2]) != "data") {
+        error("Uso: hermes clean data");
+        return 1;
+    }
+
+    return limpiarDatos();
+}
+
+
+    try {
+    iniciarSchedulerSiNecesario();
+    } catch (const exception& e) {
+        error("No se pudo iniciar el scheduler: ", e.what());
+        return 1;
+    }
 
     if (comando == "job") {
         if (argc < 3) {
-            info("Uso: hermes job <programa> [argumentos..]");
+            info(
+                "Uso: hermes job [--request-id <id>] "
+                "<programa> [argumentos..]"
+            );
             return 1;
         }
 
-        string programa = argv[2];
+        string requestId;
+        int indicePrograma = 2;
+
+        if (string(argv[2]) == "--request-id") {
+            if (argc < 5) {
+                error(
+                    "Uso: hermes job --request-id <id> "
+                    "<programa> [argumentos..]"
+                );
+                return 1;
+            }
+
+            ResultadoValidacion rr = validarRequestId(argv[3]);
+            if (!rr.esValido) {
+                error(rr.mensaje);
+                return 1;
+            }
+
+            requestId = argv[3];
+            indicePrograma = 4;
+        }
+
+        string programa = argv[indicePrograma];
 
         ResultadoValidacion rp = validarPrograma(programa);
         // Rechazar programa vacío / no valido.
@@ -57,15 +102,55 @@ int main(int argc, char* argv[]) {
         }
 
         vector<string> argumentos;
-        for (int i = 3; i < argc; ++i) {
+        for (int i = indicePrograma + 1; i < argc; ++i) {
             argumentos.push_back(argv[i]);
         }
 
-        Job job = crearJob(programa, argumentos);
+        Job job;
+        try {
+            job = crearJob(programa, argumentos, requestId);
+        } catch (const exception& e) {
+            error("No se pudo crear el Job: ", e.what());
+            return 1;
+        }
+
+        if (job.solicitudDuplicada) {
+            cout << "job ID: " << job.job_id << endl;
+            info("Solicitud duplicada; se reutiliza el Job existente.");
+            return 0;
+        }
+
+        for (int i = 0; i < 50; ++i) {
+            obtenerJobPorId(job.job_id, job);
+
+            if (job.pid > 0 || job.status == Status::FAILED) {
+                break;
+            }
+
+            sleep_for(
+                milliseconds(20)
+            );
+        }
 
         cout << "job ID: " << job.job_id << endl;
-        cout << "PID: " << job.pid << endl;
-        return 0;
+
+        if (job.status == Status::FAILED) {
+            error(
+                job.mensajeError.empty()
+                    ? "No se pudo ejecutar el programa '" + programa + "'"
+                    : job.mensajeError
+            );
+
+            return 1;
+        }
+
+        if (job.pid > 0) {
+            cout << "PID: " << job.pid << endl;
+        } else {
+            cout << "PID: pendiente (en cola)" << endl;
+        }
+
+        return 0;        
     }
     if (comando == "cancel") {
 
@@ -84,7 +169,7 @@ int main(int argc, char* argv[]) {
 
     unsigned int id =
         static_cast<unsigned int>(
-            std::stoul(argv[2])
+            stoul(argv[2])
         );
 
     ResultadoCancelacion cr = cancelarJobDetallado(id);
@@ -137,7 +222,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Convertir str a uint (seguro, ya validado)
-            unsigned int id = static_cast<unsigned int>(std::stoul(argv[3]));
+            unsigned int id = static_cast<unsigned int>(stoul(argv[3]));
 
             filtrarPorId(id);
 

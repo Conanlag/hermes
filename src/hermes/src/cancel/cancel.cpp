@@ -1,138 +1,105 @@
 #include "cancel.h"
 
-#include "job.h"
+#include "storage.h"
 #include "process.h"
+#include "timestamp.h"
 
-#include <fstream>
-
-#include <nlohmann/json.hpp>
-
-using std::ifstream;
-
-using json = nlohmann::json;
-
-
-bool cancelarJob(unsigned int jobId) {
-
-    return cancelarJobDetallado(jobId).exito;
-}
+#include <string>
+using namespace std;
 
 
 ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
-
-    const string archivoJobs = "data/jobs.json";
-
-    ifstream archivo(archivoJobs);
-
-    if (!archivo.is_open()) {
-        return {false, CodigoCancelacion::ERROR_LECTURA, "No se puede abrir: " + archivoJobs};
-    }
-
-    json jobs;
+    bool encontrado = false;
+    bool canceladoEnCola = false;
+    bool solicitudRegistrada = false;
+    int pid = 0;
+    std::string estado;
 
     try {
-
-        archivo >> jobs;
-
-    } catch (...) {
-
-        return {false, CodigoCancelacion::ERROR_LECTURA, "Error al leer: " + archivoJobs};
-    }
-
-
-    /*
-     * Buscar el Job solicitado.
-     */
-    for (const auto& job : jobs) {
-
-        if (
-            job.contains("job_id") &&
-            job["job_id"] == jobId
-        ) {
-
-            /*
-             * El Job debe indicar su estado.
-             */
-            if (
-                !job.contains("status") ||
-                !job["status"].is_string()
-            ) {
-
-                return {false, CodigoCancelacion::ERROR_LECTURA, "Estado ilegible para el Job."};
-            }
-
-
-            string estado = job["status"];
-
-
-            /*
-             * Job en cola: no hay proceso que matar.
-             * Se marca CANCELED directo sin señal.
-             */
-            if (estado == "QUEUED") {
-
-                if (
-                    actualizarResultadoJob(
-                        jobId,
-                        Status::CANCELED,
-                        -1
-                    )
-                ) {
-                    return {true, CodigoCancelacion::CANCELADO, ""};
+        modificarJobsSeguros([&](json& jobs) {
+            for (auto& item : jobs) {
+                if (!item.contains("job_id") ||
+                    item["job_id"] != jobId) {
+                    continue;
                 }
 
-                return {false, CodigoCancelacion::ERROR_LECTURA, "No se pudo actualizar el Job."};
+                encontrado = true;
+                estado = item.value("status", string{});
+
+                if (estado == "QUEUED") {
+                    item["status"] = "CANCELED";
+                    item["codigo_salida"] = -1;
+                    item["tiempo_terminacion"] =
+                        obtenerFechaHoraActual();
+
+                    canceladoEnCola = true;
+                    return true;
+                }
+
+                if (estado == "RUNNING") {
+                    item["cancel_requested"] = true;
+                    pid = item.value("pid", 0);
+                    solicitudRegistrada = true;
+                    return true;
+                }
+
+                return false;
             }
 
-
-            /*
-             * Solo los Jobs RUNNING llegan a la señal.
-             */
-            if (estado != "RUNNING") {
-
-                return {false, CodigoCancelacion::NO_CANCELABLE, "El Job no se puede cancelar (estado: " + estado + "). Solo QUEUED o RUNNING."};
-            }
-
-
-            /*
-             * El Job RUNNING debe tener un PID válido.
-             */
-            if (
-                !job.contains("pid") ||
-                (
-                    !job["pid"].is_number_integer() &&
-                    !job["pid"].is_number_unsigned()
-                )
-            ) {
-
-                return {false, CodigoCancelacion::ERROR_LECTURA, "PID ilegible para el Job."};
-            }
-
-
-            int pid = job["pid"];
-
-
-            /*
-             * Registrar que se solicitó la cancelación.
-             */
-            if (!marcarCancelacionSolicitada(jobId)) {
-                return {false, CodigoCancelacion::ERROR_LECTURA, "No se pudo registrar la cancelación."};
-            }
-
-
-            /*
-             * Enviar SIGTERM al proceso real.
-             */
-            if (terminarProceso(pid)) {
-                return {true, CodigoCancelacion::SOLICITUD_REGISTRADA, ""};
-            }
-
-            return {false, CodigoCancelacion::ERROR_LECTURA, "No se pudo enviar la señal al proceso."};
-        }
+            return false;
+        });
+    } catch (const std::exception& e) {
+        return {
+            false,
+            CodigoCancelacion::ERROR_LECTURA,
+            e.what()
+        };
     }
 
-    /*
-     * No se encontró el Job.
-     */
-    return {false, CodigoCancelacion::NO_EXISTE, "No existe el Job."};
+    if (!encontrado) {
+        return {
+            false,
+            CodigoCancelacion::NO_EXISTE,
+            "No existe el Job."
+        };
+    }
+
+    if (canceladoEnCola) {
+        return {
+            true,
+            CodigoCancelacion::CANCELADO,
+            ""
+        };
+    }
+
+    if (solicitudRegistrada) {
+        // PID 0 significa que el trabajador todavía no ha guardado
+        // el PID. El scheduler detectará la solicitud al guardarlo.
+        if (pid > 0) {
+            if (!escalarCancelacionProceso(pid, 5)) {
+                return {
+                false,
+                CodigoCancelacion::ERROR_LECTURA,
+                "No se pudo completar la solicitud de cancelación."
+                };
+            }
+        }
+
+        return {
+            true,
+            CodigoCancelacion::SOLICITUD_REGISTRADA,
+            ""
+        };
+    }
+
+    return {
+        false,
+        CodigoCancelacion::NO_CANCELABLE,
+        "El Job no se puede cancelar (estado: " +
+            estado + "). Solo QUEUED o RUNNING."
+    };
+}
+
+bool cancelarJob(unsigned int jobId) {
+    return cancelarJobDetallado(jobId).exito;
 }

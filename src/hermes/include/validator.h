@@ -22,6 +22,8 @@ ResultadoValidacion validarComando(const string& comando);
 
 ResultadoValidacion validarPrograma(const string& programa);
 
+ResultadoValidacion validarRequestId(const string& requestId);
+
 ResultadoValidacion validarTipoFiltro(const string& tipoFiltro);
 
 ResultadoValidacion validarIdTexto(const string& textoId);

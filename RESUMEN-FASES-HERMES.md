@@ -9,10 +9,16 @@
 - `src/hermes/include/` = promesas (contratos: `job.h`, `status.h`, `filter.h`, `version.h`).
 - `src/hermes/src/` = cumplimiento (implementaciones por dominio: `job/job.cpp`, `status/status.cpp`, `filter/filter.cpp`, `version/version.cpp`, `main.cpp`).
 - `src/hermes/src/IPC/`, `database/`, `network/` = intención futura (hoy solo `prueba.txt`). Según `docs/.../Estructura del proyecto.md`: IPC = entre procesos, database = persistencia/historial, network = entre computadoras.
-- `src/hermes/data/jobs.json` = persistencia fuera del binario.
+- `src/hermes/data` = enlace simbólico a `$HOME/.local/share/hermes/data/`; ahí se encuentran `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`.
 - `src/hermes/Makefile` + `README.md` = construcción y documentación.
 
 **Concepto C++:** separación declaración (` .h`) vs definición (`.cpp`) permite compilación separada.
+
+Datos persistentes:
+- `jobs.json` contiene los Jobs y sus resultados.
+- `config.json` se inicializa con `trabajos_maximos: 5`; actualmente el código no lo lee para configurar el scheduler.
+- `jobs.lock` coordina las modificaciones concurrentes de los datos.
+- `scheduler.lock` impide que se inicie un segundo scheduler mientras el primero conserva el bloqueo.
 
 ## Fase 2 — Ejecución Principal
 
@@ -41,7 +47,7 @@ Makefile:
 **Regla:** `.h` promete, `.cpp` cumple. Protegido con `#ifndef JOB_H`.
 
 - **status:** `enum class Status { QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED }` + `string statusToString(Status status);`. `status.cpp` traduce enum → texto con `switch`. Es el vocabulario común.
-- **job (escritor):** `struct Job { job_id; programa; argumentos; Status status; }` + `Job crearJob(...)`. Depende de `status.h`. Flujo en `job.cpp`: lee `data/jobs.json` con `ifstream`, tolera `parse_error`, busca `siguienteId` con `contains("job_id")`, crea `job.status = Status::QUEUED;`, convierte a JSON, `push_back`, guarda con `dump(4)` vía `ofstream`, devuelve `Job`.
+- **job (escritor):** `struct Job { job_id; programa; argumentos; Status status; }` + `Job crearJob(...)`. Depende de `status.h`. `crearJob` modifica `$HOME/.local/share/hermes/data/jobs.json` mediante `modificarJobsSeguros`, asigna el siguiente ID, agrega el Job y persiste el arreglo de forma atómica. `src/hermes/data/jobs.json` es el mismo archivo a través del enlace simbólico.
 - **filter (lector):** `void filtrarPorId / filtrarPorStatus / filtrarPorPrograma`. Devuelven `void` (imprimen). Patrón repetido: abrir → validar `is_open()` → leer con `try` → recorrer `for (const auto& job : jobs)` → checar `contains` + tipo → imprimir con `cout` → si no hay, `error(...)`.
 - **version + terminal.colors.h:** `version()` hace `info("version 0.1");`. `terminal.colors.h` define `error / warning / info` como `template <typename... Args>` en la cabecera (obligatorio para templates).
 - **IPC / network / database:** hoy no existen como código. La persistencia la hacen a mano `job` y `filter` sobre el mismo archivo.
@@ -58,14 +64,14 @@ Ciclo:
 
 `job.cpp` escribe, `filter.cpp` lee. El JSON es el contrato de persistencia que los une sin llamarse entre ellos.
 
-`ofstream archivoEscritura(archivoJobs);` crea el archivo si no existe, lo trunca si existe. Por eso borrar `jobs.json` solo reinicia el historial.
+`storage.cpp` serializa las modificaciones con mutex y `flock`, escribe en un archivo temporal y publica el resultado con `rename`. El historial se mantiene en `$HOME/.local/share/hermes/data/jobs.json`.
 
 ## Cómo conecta todo (lectura de 30 segundos)
 
 1. `Makefile` junta todos los `.cpp` en el binario `hermes`.
 2. `main.cpp` valida `argc/argv` y delega a `version`, `job` o `filter`.
 3. `status` define el idioma de estados.
-4. `job` crea Jobs (nacen `QUEUED`) y los guarda en `data/jobs.json` vía `nlohmann/json`.
+4. `job` crea Jobs (nacen `QUEUED`) y los guarda en `$HOME/.local/share/hermes/data/jobs.json` vía `nlohmann/json` (también accesible por `src/hermes/data/jobs.json`).
 5. `filter` lee ese mismo JSON y los muestra por `id / status / programa`.
 6. `IPC / database / network` son el hueco futuro: centralizar persistencia y comunicación.
 

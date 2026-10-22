@@ -37,7 +37,7 @@ Introduce el día de nacimiento (DD): Traceback (most recent call last):
                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 EOFError
 ```
-y en jobs.json se vera lo siguiente:
+y en `$HOME/.local/share/hermes/data/jobs.json` (también visible desde `src/hermes/data/jobs.json` por el enlace simbólico) se verá lo siguiente:
 ```
     {
         "argumentos": [

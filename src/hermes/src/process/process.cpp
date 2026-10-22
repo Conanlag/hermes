@@ -1,240 +1,178 @@
 #include "process.h"
 
+#include <spawn.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>
-
+#include <fcntl.h>
 #include <cerrno>
+#include <chrono>
+#include <thread>
 #include <cstring>
 #include <stdexcept>
+#include <vector>
+#include <signal.h>
 
-using std::runtime_error;
+using namespace std;
+using namespace std::this_thread;
+using namespace std::chrono;
 
+
+extern char** environ;
 
 pid_t iniciarProceso(
     const string& programa,
     const vector<string>& argumentos,
     int& pipeStderr
 ) {
-
-    /*
-     * Pipe utilizado para capturar el stderr
-     * del proceso que vamos a ejecutar.
-     *
-     * pipeStderr[0] -> lectura
-     * pipeStderr[1] -> escritura
-     */
     int pipefd[2];
 
     if (pipe(pipefd) == -1) {
-
-        throw runtime_error(
-            "No se pudo crear el pipe de stderr"
-        );
+        throw runtime_error("No se pudo crear el pipe");
     }
 
+    posix_spawn_file_actions_t acciones;
 
-    pid_t pid = fork();
+    int error = posix_spawn_file_actions_init(&acciones);
 
-    if (pid < 0) {
-
+    if (error != 0) {
         close(pipefd[0]);
         close(pipefd[1]);
-
         throw runtime_error(
-            "No se pudo crear el proceso"
+            "No se pudieron inicializar las acciones del proceso"
         );
     }
 
-
-    // -------------------------------------------------
-    // PROCESO HIJO
-    // -------------------------------------------------
-
-    if (pid == 0) {
-
-        /*
-         * El hijo no necesita leer del pipe.
-         */
+    auto limpiar = [&]() {
+        posix_spawn_file_actions_destroy(&acciones);
         close(pipefd[0]);
-
-
-        /*
-         * Redirigir stderr hacia el pipe.
-         *
-         * A partir de aquí, todo lo que el programa
-         * escriba en stderr llegará al supervisor.
-         */
-        if (dup2(
-            pipefd[1],
-            STDERR_FILENO
-        ) == -1) {
-
-            _exit(127);
-        }
-
-
-        /*
-         * Ya tenemos stderr conectado al pipe,
-         * por lo que podemos cerrar el descriptor
-         * original.
-         */
         close(pipefd[1]);
+    };
 
-
-        /*
-         * Construir los argumentos para execvp().
-         */
-        vector<char*> argumentosExec;
-
-        argumentosExec.push_back(
-            const_cast<char*>(
-                programa.c_str()
-            )
-        );
-
-        for (const auto& argumento : argumentos) {
-
-            argumentosExec.push_back(
-                const_cast<char*>(
-                    argumento.c_str()
-                )
-            );
-        }
-
-        argumentosExec.push_back(nullptr);
-
-
-        /*
-         * Ejecutar el programa.
-         */
-        execvp(
-            programa.c_str(),
-            argumentosExec.data()
-        );
-
-
-        /*
-         * Si execvp() regresa significa que
-         * no pudo ejecutar el programa.
-         *
-         * Como stderr ya está conectado al pipe,
-         * este mensaje será recibido por Hermes.
-         *
-         * No usamos error() aquí porque error()
-         * escribiría nuevamente en stderr y queremos
-         * terminar correctamente el proceso hijo.
-         */
-        const char* mensaje =
-            std::strerror(errno);
-
-        dprintf(
-            STDERR_FILENO,
-            "No se pudo ejecutar el programa '%s': %s\n",
-            programa.c_str(),
-            mensaje
-        );
-
-
-        /*
-         * 127 indica que el programa no pudo
-         * ser ejecutado.
-         */
-        _exit(127);
-    }
-
-
-    // -------------------------------------------------
-    // PROCESO PADRE
-    // -------------------------------------------------
-
-    /*
-     * El padre no escribe en el pipe.
-     */
-    close(pipefd[1]);
-
-
-    /*
-     * Devolvemos al proceso que llamó a esta función
-     * el descriptor utilizado para leer stderr.
-     */
-    pipeStderr = pipefd[0];
-
-
-    return pid;
-}
-
-
-bool esperarProceso(
-    pid_t pid,
-    int& codigoSalida
-) {
-
-    int estado;
-
-    pid_t resultado;
-
-    do {
-
-        resultado = waitpid(
-            pid,
-            &estado,
-            0
-        );
-
-    } while (
-        resultado == -1 &&
-        errno == EINTR
+    error = posix_spawn_file_actions_addclose(
+        &acciones, pipefd[0]
     );
 
+    if (error == 0) {
+        error = posix_spawn_file_actions_addopen(
+            &acciones, STDOUT_FILENO, "/dev/null", O_WRONLY, 0
+        );
+    }
 
-    if (resultado == -1) {
+    if (error == 0) {
+        error = posix_spawn_file_actions_adddup2(
+            &acciones, pipefd[1], STDERR_FILENO
+        );
+    }
 
+    if (error == 0) {
+        error = posix_spawn_file_actions_addclose(
+            &acciones, pipefd[1]
+        );
+    }
+
+    if (error != 0) {
+        limpiar();
+        throw runtime_error(
+            "No se pudieron configurar los descriptores del proceso"
+        );
+    }
+
+    vector<char*> argv;
+    argv.reserve(argumentos.size() + 2);
+    argv.push_back(const_cast<char*>(programa.c_str()));
+
+    for (const auto& argumento : argumentos) {
+        argv.push_back(const_cast<char*>(argumento.c_str()));
+    }
+
+    argv.push_back(nullptr);
+
+    pid_t pid = -1;
+
+    error = posix_spawnp(
+        &pid,
+        programa.c_str(),
+        &acciones,
+        nullptr,
+        argv.data(),
+        environ
+    );
+
+    posix_spawn_file_actions_destroy(&acciones);
+    close(pipefd[1]);
+
+    if (error != 0) {
+        close(pipefd[0]);
+        throw runtime_error(
+            "No se pudo ejecutar el programa '" + programa +
+            "': " + std::strerror(error)
+        );
+    }
+
+    pipeStderr = pipefd[0];
+    return pid;
+}
+bool escalarCancelacionProceso(pid_t pid, int tiempoGraciaSegundos) {
+    if (pid <= 0 || tiempoGraciaSegundos < 0) {
         return false;
     }
 
+    // Solicitar terminación normal.
+    if (kill(pid, SIGTERM) == -1 && errno != ESRCH) {
+        return false;
+    }
 
-    /*
-     * El proceso terminó normalmente mediante
-     * exit() o return desde main().
-     */
+    // Esperar el periodo de gracia sin recoger el proceso:
+    // waitpid() sigue siendo responsabilidad del trabajador.
+    for (int i = 0; i < tiempoGraciaSegundos * 10; ++i) {
+        if (kill(pid, 0) == -1 && errno == ESRCH) {
+            return true;
+        } sleep_for(
+            milliseconds(100)
+        );
+    }
+
+    // Si sigue existiendo, solicitar terminación forzada.
+    if (kill(pid, SIGKILL) == -1 && errno != ESRCH) {
+        return false;
+    }
+
+    return true;
+}
+
+bool esperarProceso(pid_t pid, int& codigoSalida) {
+    int estado = 0;
+
+    while (true) {
+        pid_t resultado = waitpid(pid, &estado, 0);
+
+        if (resultado == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            codigoSalida = -1;
+            return false;
+        }
+
+        break;
+    }
+
     if (WIFEXITED(estado)) {
-
-        codigoSalida =
-            WEXITSTATUS(estado);
-
+        codigoSalida = WEXITSTATUS(estado);
         return true;
     }
 
-
-    /*
-     * El proceso terminó debido a una señal.
-     */
     if (WIFSIGNALED(estado)) {
-
-        codigoSalida =
-            -WTERMSIG(estado);
-
+        codigoSalida = -WTERMSIG(estado);
         return true;
     }
 
-
+    codigoSalida = -1;
     return false;
 }
 
-
-bool terminarProceso(
-    pid_t pid
-) {
-
-    if (pid <= 0) {
-
-        return false;
-    }
-
-    return kill(
-        pid,
-        SIGTERM
-    ) == 0;
+bool terminarProceso(pid_t pid) {
+    return pid > 0 && kill(pid, SIGTERM) == 0;
 }

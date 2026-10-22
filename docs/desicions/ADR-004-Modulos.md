@@ -55,6 +55,10 @@ Cada directorio tendrá una responsabilidad específica:
 * **`data/`**: contendrá temporalmente la información persistente de los procesos, como `jobs.json`.
 * **`main.cpp`**: funcionará como punto de entrada del programa y se encargará principalmente de interpretar los comandos y coordinar los diferentes módulos.
 
+### Ubicación de datos vigente
+
+La estructura `data/` mostrada en la decisión inicial actualmente es un enlace simbólico desde `src/hermes/data` a `$HOME/.local/share/hermes/data/`. El directorio físico contiene `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`; sus responsabilidades se detallan en la guía técnica de [Estructura del proyecto](../technical-guide/2-Nucleo%20del%20proyecto/Estructura%20del%20proyecto.md#directorio-de-datos-persistentes).
+
 Los módulos se mantendrán separados para evitar convertir `main.cpp` en un archivo monolítico con una gran cantidad de código. Cada funcionalidad tendrá su propia implementación y podrá ser utilizada desde `main.cpp` mediante sus archivos de cabecera.
 
 Además, se utilizará la opción `-Iinclude` en el `Makefile` para indicar al compilador la ubicación de las cabeceras. De esta manera, los archivos de implementación podrán incluir las bibliotecas del proyecto sin necesidad de declarar individualmente cada ruta de inclusión dentro del `Makefile`.
