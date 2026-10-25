@@ -4,17 +4,17 @@ set -u
 
 HERMES="./hermes"
 
-PASS=0
-FAIL=0
+PASS=
+FAIL=
 
 pass() {
-    echo "[PASS] $1"
-    PASS=$((PASS + 1))
+    echo "[PASS] $"
+    PASS=$((PASS + ))
 }
 
 fail() {
-    echo "[FAIL] $1"
-    FAIL=$((FAIL + 1))
+    echo "[FAIL] $"
+    FAIL=$((FAIL + ))
 }
 
 # ----------------------------------------
@@ -22,21 +22,21 @@ fail() {
 # ----------------------------------------
 
 wait_for_status() {
-    JOB_ID="$1"
+    JOB_ID="$"
     EXPECTED_STATUS="$2"
-    TIMEOUT=10
+    TIMEOUT=
 
-    for ((i=0; i<TIMEOUT; i++)); do
+    for ((i=; i<TIMEOUT; i++)); do
         RESULT=$("$HERMES" filter id "$JOB_ID" 2>/dev/null)
 
         if echo "$RESULT" | grep -q "$EXPECTED_STATUS"; then
-            return 0
+            return 
         fi
 
-        sleep 1
+        sleep 
     done
 
-    return 1
+    return 
 }
 
 # ----------------------------------------
@@ -44,7 +44,7 @@ wait_for_status() {
 # ----------------------------------------
 
 get_job_id() {
-    echo "$1" | grep "job ID:" | awk '{print $3}'
+    echo "$" | grep "job ID:" | awk '{print $3}'
 }
 
 echo
@@ -54,14 +54,14 @@ echo "========================================"
 echo
 
 # ----------------------------------------
-# 1. Verificar ejecutable
+# . Verificar ejecutable
 # ----------------------------------------
 
 if [ -x "$HERMES" ]; then
     pass "El ejecutable hermes existe"
 else
     fail "El ejecutable hermes no existe"
-    exit 1
+    exit 
 fi
 
 # ----------------------------------------
@@ -113,7 +113,7 @@ else
 fi
 
 # ----------------------------------------
-# 5. Programa inexistente
+# . Programa inexistente
 # ----------------------------------------
 
 OUTPUT=$("$HERMES" job programa_que_no_existe 2>&1)
@@ -138,8 +138,8 @@ fi
 TEMP_FILE=$(mktemp)
 
 # Lanzar Hermes en segundo plano.
-# El proceso ejecutado por Hermes tendrá una duración de 10 segundos.
-"$HERMES" job sleep 10 > "$TEMP_FILE" 2>&1 &
+# El proceso ejecutado por Hermes tendrá una duración de  segundos.
+"$HERMES" job sleep  > "$TEMP_FILE" 2>&1 &
 
 HERMES_PID=$!
 
@@ -159,12 +159,12 @@ JOB_ID=$(get_job_id "$OUTPUT")
 if [ -n "$JOB_ID" ]; then
     pass "Creación de job para cancelación"
 
-    # Solicitar la cancelación mientras sleep 10
+    # Solicitar la cancelación mientras sleep 
     # todavía debería estar ejecutándose.
     CANCEL_OUTPUT=$("$HERMES" cancel "$JOB_ID" 2>&1)
     CANCEL_EXIT=$?
 
-    if [ "$CANCEL_EXIT" -eq 0 ]; then
+    if [ "$CANCEL_EXIT" -eq  ]; then
         pass "Comando cancel ejecutado"
 
         if wait_for_status "$JOB_ID" "CANCELED"; then
@@ -186,7 +186,7 @@ fi
 
 OUTPUT=$("$HERMES" filter status SUCCEEDED 2>&1)
 
-if [ $? -eq 0 ]; then
+if [ $? -eq  ]; then
     pass "Filtro por status"
 else
     fail "Filtro por status"
@@ -204,11 +204,11 @@ echo "Pruebas exitosas: $PASS"
 echo "Pruebas fallidas: $FAIL"
 echo "========================================"
 
-if [ "$FAIL" -eq 0 ]; then
+if [ "$FAIL" -eq  ]; then
     echo "TODAS LAS PRUEBAS PASARON"
-    exit 0
+    exit 
 else
     echo "ALGUNAS PRUEBAS FALLARON"
-    exit 1
+    exit 
 fi
 

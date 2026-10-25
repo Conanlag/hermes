@@ -152,6 +152,7 @@ int main(int argc, char* argv[]) {
 
         return 0;        
     }
+    
     if (comando == "cancel") {
 
     if (argc < 3) {

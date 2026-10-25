@@ -1,0 +1,3 @@
+# Los scripts de validación deben conservar finales LF aunque se editen en Windows.
+verif/scripts/*.sh text eol=lf
+src/hermes/tests/*.sh text eol=lf

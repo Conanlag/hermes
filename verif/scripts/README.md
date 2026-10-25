@@ -1,0 +1,1 @@
+Las pruebas deben ejecutarse en un entorno Linux nativo o WSL. Si el repositorio fue clonado desde herramientas de Windows y los scripts arrojan errores de formato (\r: command not found), ejecute dos2unix verif/scripts/*.sh antes de probar.
