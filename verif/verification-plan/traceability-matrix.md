@@ -14,7 +14,7 @@
 | RF-09    | Listado de trabajos con filtros bÃ¡sicos por estado | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
 | RF-10    | CancelaciÃ³n de trabajo en ejecuciÃ³n con resultado reflejado | CrÃ­tica     | Prueba  | TC-005    | verif/scripts/TC-005.sh + verif/results/tc005.log ([PASS]) | PASS        | -                   |
 | RF-11    | Captura separada de stdout y stderr | Alta        | Prueba  | TC-006    | verif/scripts/TC-006.sh + verif/results/tc006.log ([PASS]) | PASS        | -                   |
-| RF-12    |                     |             |          |           |             | Pendiente   |                     |
+| RF-12    | Persistencia de metadatos y resultados tras reinicio del scheduler | Alta | Prueba | TC-016 | verif/scripts/TC-016.sh + verif/results/results_TC-016.md ([PASS]) | PASS | - |
 | RF-13    |                     |             |          |           |             | Pendiente   |                     |
 | RF-14    |                     |             |          |           |             | Pendiente   |                     |
 | RF-15    |                     |             |          |           |             | Pendiente   |                     |
