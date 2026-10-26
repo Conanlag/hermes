@@ -5,6 +5,7 @@
 #include "storage.h"
 #include "timestamp.h"
 #include "data_paths.h"
+#include "event_log.h"
 
 #include <chrono>
 #include <cerrno>
@@ -13,6 +14,7 @@
 #include <string>
 #include <stdexcept>
 #include <exception>
+#include <cstring>
 
 #include <fcntl.h>
 #include <sys/file.h>
@@ -109,10 +111,17 @@ void guardarPid(unsigned int id, pid_t pid) {
         return false;
     });
 
+    hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a RUNNING", {
+        {"pid", static_cast<int>(pid)}
+    });
+
     // Si se pidió cancelar antes de guardar el PID,
     // terminar el proceso cuando su PID esté disponible.
     if (cancelar) {
         terminarProceso(pid);
+        hermes::EventLog::log_event(id, hermes::EventLevel::DEBUG, "Cancelación solicitada antes de iniciar ejecución", {
+            {"pid", static_cast<int>(pid)}
+        });
     }
 }
 
@@ -121,6 +130,15 @@ void finalizarTrabajo(
     int codigoSalida,
     bool procesoValido
 ) {
+    bool fueCancelado = false;
+    bool fueExitoso = false;
+    bool fueFallido = false;
+    int signalNumber = 0;
+
+    if (procesoValido && codigoSalida < 0) {
+        signalNumber = -codigoSalida;
+    }
+
     modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
             if (!item.contains("job_id") ||
@@ -135,10 +153,13 @@ void finalizarTrabajo(
 
             if (cancelar) {
                 item["status"] = "CANCELED";
+                fueCancelado = true;
             } else if (procesoValido && codigoSalida == 0) {
                 item["status"] = "SUCCEEDED";
+                fueExitoso = true;
             } else {
                 item["status"] = "FAILED";
+                fueFallido = true;
             }
 
             item["codigo_salida"] = codigoSalida;
@@ -150,6 +171,24 @@ void finalizarTrabajo(
 
         return false;
     });
+
+    if (fueCancelado) {
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", {
+            {"estado_previo", "RUNNING"},
+            {"exit_code", codigoSalida}
+        });
+    } else if (fueExitoso) {
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a SUCCEEDED", {
+            {"exit_code", codigoSalida}
+        });
+    } else if (fueFallido) {
+        nlohmann::json ctx;
+        ctx["exit_code"] = codigoSalida;
+        if (signalNumber > 0) {
+            ctx["signal_number"] = signalNumber;
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Transición a FAILED", ctx);
+    }
 }
 
 void registrarFallo(
@@ -157,6 +196,8 @@ void registrarFallo(
     int codigoSalida,
     const string& mensaje
 ) {
+    bool fueCancelado = false;
+
     modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
             if (!item.contains("job_id") ||
@@ -174,12 +215,27 @@ void registrarFallo(
             item["mensaje_error"] = mensaje;
             item["tiempo_terminacion"] =
                 obtenerFechaHoraActual();
+            fueCancelado = cancelar;
 
             return true;
         }
 
         return false;
     });
+
+    if (fueCancelado) {
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", {
+            {"estado_previo", "RUNNING"},
+            {"exit_code", codigoSalida},
+            {"detalle", mensaje}
+        });
+    } else {
+        nlohmann::json ctx;
+        ctx["exit_code"] = codigoSalida;
+        ctx["detalle"] = mensaje;
+        ctx["errno"] = errno;
+        hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Error interno del daemon", ctx);
+    }
 }
 
 void trabajador() {
@@ -314,6 +370,12 @@ void iniciarSchedulerSiNecesario() {
     );
 
     if (descriptor == -1) {
+        hermes::EventLog::log_event_system(hermes::EventLevel::ERROR, "Error interno del daemon", {
+            {"funcion", "open"},
+            {"archivo", "scheduler.lock"},
+            {"errno", errno},
+            {"detalle", std::strerror(errno)}
+        });
         throw runtime_error(
             "No se pudo abrir scheduler.lock"
         );
@@ -328,6 +390,11 @@ void iniciarSchedulerSiNecesario() {
     pid_t pid = fork();
 
     if (pid == -1) {
+        hermes::EventLog::log_event_system(hermes::EventLevel::ERROR, "Error interno del daemon", {
+            {"funcion", "fork"},
+            {"errno", errno},
+            {"detalle", std::strerror(errno)}
+        });
         flock(descriptor, LOCK_UN);
         close(descriptor);
 

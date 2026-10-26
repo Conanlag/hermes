@@ -1,5 +1,6 @@
 
 #include "validator.h"
+#include "event_log.h"
 
 #include <stdexcept>
 
@@ -10,6 +11,11 @@ using namespace std;
 ResultadoValidacion validarComando(const string& comando) {
 
     if (comando.empty()) {
+
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", comando},
+            {"motivo_del_rechazo", "Comando vacio"}
+        });
 
         return {
             false,
@@ -35,6 +41,11 @@ ResultadoValidacion validarComando(const string& comando) {
         };
     }
 
+    hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+        {"comando_intentado", comando},
+        {"motivo_del_rechazo", "Comando no reconocido"}
+    });
+
     return {
         false,
         CodigoValidacion::NO_AUTORIZADO,
@@ -49,6 +60,12 @@ ResultadoValidacion validarComando(const string& comando) {
 ResultadoValidacion validarPrograma(const string& programa) {
 
     if (programa.empty()) {
+
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "job"},
+            {"programa_intentado", programa},
+            {"motivo_del_rechazo", "Programa vacio"}
+        });
 
         return {
             false,
@@ -67,6 +84,11 @@ ResultadoValidacion validarPrograma(const string& programa) {
 
 ResultadoValidacion validarRequestId(const string& requestId) {
     if (requestId.empty() || requestId.size() > 128) {
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "job"},
+            {"request_id_intentado", requestId},
+            {"motivo_del_rechazo", "Tamaño o formato inválido de request-id"}
+        });
         return {
             false,
             CodigoValidacion::MALFORMADO,
@@ -85,6 +107,11 @@ ResultadoValidacion validarRequestId(const string& requestId) {
             caracter == ':';
 
         if (!valido) {
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+                {"comando_intentado", "job"},
+                {"request_id_intentado", requestId},
+                {"motivo_del_rechazo", "Caracteres inválidos en request-id"}
+            });
             return {
                 false,
                 CodigoValidacion::MALFORMADO,
@@ -108,6 +135,12 @@ ResultadoValidacion validarTipoFiltro(
 
     if (tipoFiltro.empty()) {
 
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "filter"},
+            {"tipo_filtro_intentado", tipoFiltro},
+            {"motivo_del_rechazo", "Tipo de filtro vacio"}
+        });
+
         return {
             false,
             CodigoValidacion::VACIO,
@@ -128,6 +161,12 @@ ResultadoValidacion validarTipoFiltro(
         };
     }
 
+    hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+        {"comando_intentado", "filter"},
+        {"tipo_filtro_intentado", tipoFiltro},
+        {"motivo_del_rechazo", "Filtro no reconocido"}
+    });
+
     return {
         false,
         CodigoValidacion::NO_AUTORIZADO,
@@ -144,6 +183,12 @@ ResultadoValidacion validarIdTexto(
 
     if (textoId.empty()) {
 
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "cancel"},
+            {"id_intentado", textoId},
+            {"motivo_del_rechazo", "ID vacio"}
+        });
+
         return {
             false,
             CodigoValidacion::VACIO,
@@ -154,6 +199,11 @@ ResultadoValidacion validarIdTexto(
     // Valida que solo contenga caracteres numéricos.
     for (char caracter : textoId) {
         if (caracter < '0' || caracter > '9') {
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+                {"comando_intentado", "cancel"},
+                {"id_intentado", textoId},
+                {"motivo_del_rechazo", "ID mal formado"}
+            });
             return {
                 false,
                 CodigoValidacion::MALFORMADO,
@@ -176,6 +226,12 @@ ResultadoValidacion validarIdTexto(
         // Verificar que todo el texto haya sido convertido.
         if (pos != textoId.size()) {
 
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+                {"comando_intentado", "cancel"},
+                {"id_intentado", textoId},
+                {"motivo_del_rechazo", "ID mal formado"}
+            });
+
             return {
                 false,
                 CodigoValidacion::MALFORMADO,
@@ -187,6 +243,12 @@ ResultadoValidacion validarIdTexto(
 
         // Los IDs de Hermes comienzan en 1.
         if (valor == 0) {
+
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+                {"comando_intentado", "cancel"},
+                {"id_intentado", textoId},
+                {"motivo_del_rechazo", "ID fuera de rango"}
+            });
 
             return {
                 false,
@@ -203,6 +265,12 @@ ResultadoValidacion validarIdTexto(
 
     } catch (const std::invalid_argument&) {
 
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "cancel"},
+            {"id_intentado", textoId},
+            {"motivo_del_rechazo", "ID mal formado"}
+        });
+
         return {
             false,
             CodigoValidacion::MALFORMADO,
@@ -212,6 +280,12 @@ ResultadoValidacion validarIdTexto(
         };
 
     } catch (const std::out_of_range&) {
+
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "cancel"},
+            {"id_intentado", textoId},
+            {"motivo_del_rechazo", "ID fuera de rango"}
+        });
 
         return {
             false,
@@ -229,6 +303,12 @@ ResultadoValidacion validarStatusTexto(
 ) {
 
     if (status.empty()) {
+
+        hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+            {"comando_intentado", "filter"},
+            {"status_intentado", status},
+            {"motivo_del_rechazo", "Estado vacio"}
+        });
 
         return {
             false,
@@ -252,6 +332,12 @@ ResultadoValidacion validarStatusTexto(
             ""
         };
     }
+
+    hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
+        {"comando_intentado", "filter"},
+        {"status_intentado", status},
+        {"motivo_del_rechazo", "Estado no reconocido"}
+    });
 
     return {
         false,
