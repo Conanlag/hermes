@@ -1,3 +1,4 @@
+
 #include "scheduler.h"
 
 #include "job.h"
@@ -25,8 +26,6 @@ using namespace std;
 using namespace std::this_thread;
 using namespace std::chrono;
 
-
-
 namespace {
 
 constexpr int NUM_TRABAJADORES = 5;
@@ -34,7 +33,7 @@ constexpr int NUM_TRABAJADORES = 5;
 struct TrabajoPendiente {
     unsigned int id = 0;
     string programa;
-    vector<std::string> argumentos;
+    vector<string> argumentos;
 };
 
 bool reservarTrabajo(TrabajoPendiente& trabajo) {
@@ -182,15 +181,41 @@ void registrarFallo(
     });
 }
 
+// RF-12: recuperar trabajos que quedaron en RUNNING
+// cuando el scheduler anterior dejó de funcionar.
+void recuperarTrabajosInterrumpidos() {
+    modificarJobsSeguros([](json& jobs) {
+        bool huboCambios = false;
+
+        for (auto& item : jobs) {
+            if (!item.contains("status") ||
+                !item["status"].is_string() ||
+                item["status"] != "RUNNING") {
+                continue;
+            }
+
+            item["status"] = "FAILED";
+            item["codigo_salida"] = -1;
+            item["mensaje_error"] =
+                "Trabajo interrumpido por reinicio o caída "
+                "del scheduler. No se reejecutó automáticamente.";
+            item["tiempo_terminacion"] =
+                obtenerFechaHoraActual();
+
+            huboCambios = true;
+        }
+
+        return huboCambios;
+    });
+}
+
 void trabajador() {
     while (true) {
         TrabajoPendiente trabajo;
 
         try {
             if (!reservarTrabajo(trabajo)) {
-                sleep_for(
-                    milliseconds(200)
-                );
+                sleep_for(milliseconds(200));
                 continue;
             }
 
@@ -263,9 +288,7 @@ void trabajador() {
                 }
             }
 
-            sleep_for(
-            milliseconds(200)
-            );
+            sleep_for(milliseconds(200));
 
         } catch (...) {
             if (trabajo.id != 0) {
@@ -281,9 +304,7 @@ void trabajador() {
                 }
             }
 
-            sleep_for(
-                milliseconds(200)
-            );
+            sleep_for(milliseconds(200));
         }
     }
 }
@@ -360,6 +381,16 @@ void iniciarSchedulerSiNecesario() {
 
     // El descriptor de scheduler.lock permanece abierto
     // en el daemon durante la ejecución del scheduler.
+
+    // Recuperar los trabajos interrumpidos antes de iniciar
+    // los cinco trabajadores y procesar la cola.
+    try {
+        recuperarTrabajosInterrumpidos();
+    } catch (...) {
+        // No iniciar el scheduler si falla la recuperación.
+        _exit(1);
+    }
+
     ejecutarScheduler();
 
     _exit(0);
