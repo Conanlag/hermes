@@ -55,3 +55,4 @@
 | RNF-24   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-25   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
+| RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-020 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
