@@ -8,13 +8,13 @@
 | RF-03    | Cola inicial cuando no hay capacidad inmediata | Alta        | Prueba  | TC-002    | verif/scripts/TC-002.sh + verif/results/tc002.log (FAIL) | FAIL | -                   |
 | RF-04    |                     |             |          |           |             | Pendiente   |                     |
 | RF-05    |                     |             |          |           |             | Pendiente   |                     |
-| RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED | Cri­tica | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([FAIL]) | FAIL | -                   |
-| RF-07    | Tiempos de recepcion, inicio, terminacion y codigo de salida | Alta | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([FAIL]) | FAIL | -                   |
-| RF-08    | Consulta de un trabajo mediante ID | Alta | Prueba  | TC-004 | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS | -                   |
-| RF-09    | Listado de trabajos con filtros basicos por estado | Alta | Prueba  | TC-004 | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
-| RF-10    | Cancelacion de trabajo en ejecucion con resultado reflejado | Cri­tica | Prueba  | TC-005 | verif/scripts/TC-005.sh + verif/results/tc005.log ([PASS]) | PASS | -                   |
-| RF-11    | Captura separada de stdout y stderr | Alta | Prueba | TC-006   | verif/scripts/TC-006.sh + verif/results/tc006.log ([PASS]) | PASS        | -                   |
-| RF-12    |                     |             |          |           |             | Pendiente   |                     |
+| RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED | CrÃ­tica     | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([PASS]) | PASS        | -                   |
+| RF-07    | Tiempos de recepciÃ³n, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
+| RF-08    | Consulta de un trabajo mediante ID | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
+| RF-09    | Listado de trabajos con filtros bÃ¡sicos por estado | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
+| RF-10    | CancelaciÃ³n de trabajo en ejecuciÃ³n con resultado reflejado | CrÃ­tica     | Prueba  | TC-005    | verif/scripts/TC-005.sh + verif/results/tc005.log ([PASS]) | PASS        | -                   |
+| RF-11    | Captura separada de stdout y stderr | Alta        | Prueba  | TC-006    | verif/scripts/TC-006.sh + verif/results/tc006.log ([PASS]) | PASS        | -                   |
+| RF-12    | Persistencia de metadatos y resultados tras reinicio del scheduler | Alta | Prueba | TC-016 | verif/scripts/TC-016.sh + verif/results/results_TC-016.md ([PASS]) | PASS | - |
 | RF-13    |                     |             |          |           |             | Pendiente   |                     |
 | RF-14    |                     |             |          |           |             | Pendiente   |                     |
 | RF-15    |                     |             |          |           |             | Pendiente   |                     |
@@ -27,13 +27,14 @@
 | RF-22    |                     |             |          |           |             | Pendiente   |                     |
 | RF-23    |                     |             |          |           |             | Pendiente   |                     |
 | RF-24    |                     |             |          |           |             | Pendiente   |                     |
-| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | src/hermes/tests/test_rf27.sh ([PASS]) | PASS | - |
+| RF-26    | Cancelaciones concurrentes coherentes | Alta | Prueba | TC-019 | verif/scripts/TC-019.sh; 10/10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
+| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | verif/scripts/TC-017.sh ([PASS]); verif/results/results_TC-017.md | PASS | - |
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | ConstrucciÃ³n reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-04   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-05   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-06   |                     |             |          |           |             | Pendiente   |                     |
+| RNF-05   | Consulta de estado en menos de 1 s con 100 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; evidencia acumulada en verif/results/results_TC-018.md | PASS | - |
+| RNF-06   | Conservación de metadatos para al menos 500 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; fixture de 519 registros validado | PASS | - |
 | RNF-07   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-08   | Solicitud invalida no termina el servicio (local; desconexion en Fase 2) | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
 | RNF-09   | TerminaciÃ³n anormal de un trabajo no afecta a otros | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
@@ -54,3 +55,5 @@
 | RNF-24   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-25   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
+| RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-020 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
+| RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Alta | Prueba de concurrencia | TC-021 | verif/scripts/TC-021.sh; 10 y 25 Jobs ([PASS]); verif/results/results_TC-021.md | PASS | - |
