@@ -2,4 +2,4 @@
 
 Las referencias a `data/jobs.json` en los casos de prueba apuntan al archivo persistente `$HOME/.local/share/hermes/data/jobs.json`: dentro del repositorio, `src/hermes/data` es un enlace simbólico al directorio de datos. Este directorio también contiene `config.json`, `jobs.lock` y `scheduler.lock`. `config.json` se inicializa con `trabajos_maximos: 5`, pero hoy no se lee para configurar la concurrencia; el scheduler usa cinco trabajadores definidos en código.
 
-Los casos para RF-27 y RF-12 son [TC-017](./TC-017.md) y [TC-016](./TC-016.md), respectivamente.
+Los casos [TC-017](./TC-017.md) (RF-27), [TC-018](./TC-018.md) (RNF-05 y RNF-06) y [TC-019](./TC-019.md) (RF-26) se ejecutan desde `verif/scripts/`. Sus resultados se guardan en `verif/results/results_TC-017.md`, `results_TC-018.md` y `results_TC-019.md`, respectivamente. El caso RF-12 está documentado en [TC-016](./TC-016.md).

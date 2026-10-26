@@ -27,13 +27,14 @@
 | RF-22    |                     |             |          |           |             | Pendiente   |                     |
 | RF-23    |                     |             |          |           |             | Pendiente   |                     |
 | RF-24    |                     |             |          |           |             | Pendiente   |                     |
-| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | src/hermes/tests/test_rf27.sh ([PASS]) | PASS | - |
+| RF-26    | Cancelaciones concurrentes coherentes | Alta | Prueba | TC-019 | verif/scripts/TC-019.sh; 10/10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
+| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | verif/scripts/TC-017.sh ([PASS]); verif/results/results_TC-017.md | PASS | - |
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | ConstrucciÃ³n reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-04   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-05   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-06   |                     |             |          |           |             | Pendiente   |                     |
+| RNF-05   | Consulta de estado en menos de 1 s con 100 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; evidencia acumulada en verif/results/results_TC-018.md | PASS | - |
+| RNF-06   | Conservación de metadatos para al menos 500 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; fixture de 519 registros validado | PASS | - |
 | RNF-07   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-08   | Solicitud invÃ¡lida no termina el servicio (local; desconexiÃ³n en Fase 2) | Alta        | Prueba  | TC-008    | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS        | -                   |
 | RNF-09   | TerminaciÃ³n anormal de un trabajo no afecta a otros | Alta        | Prueba  | TC-008    | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS        | -                   |
