@@ -35,8 +35,6 @@ using namespace std::chrono;
 
 namespace {
 
-constexpr int NUM_TRABAJADORES = 5;
-
 struct TrabajoPendiente {
     unsigned int id = 0;
     string programa;
@@ -872,7 +870,7 @@ void trabajador() {
 
 } // namespace anónimo
 
-void ejecutarScheduler() {
+void ejecutarScheduler(int trabajosMaximos) {
     instalarHandlersDeApagado();
 
     // El coordinador observa el flag y, cuando llega SIGTERM/SIGINT, señaliza
@@ -880,9 +878,9 @@ void ejecutarScheduler() {
     std::thread coordinador(coordinarApagado);
 
     vector<thread> trabajadores;
-    trabajadores.reserve(NUM_TRABAJADORES);
+    trabajadores.reserve(trabajosMaximos);
 
-    for (int i = 0; i < NUM_TRABAJADORES; ++i) {
+    for (int i = 0; i < trabajosMaximos; ++i) {
         trabajadores.emplace_back(trabajador);
     }
 
@@ -893,7 +891,7 @@ void ejecutarScheduler() {
     coordinador.join();
 }
 
-void iniciarSchedulerSiNecesario() {
+void iniciarSchedulerSiNecesario(int trabajosMaximos) {
     const string rutaLock =
         hermes::rutaDatos("scheduler.lock");
 
@@ -988,7 +986,7 @@ void iniciarSchedulerSiNecesario() {
     // Se abrió con O_CLOEXEC, así que los Jobs hijos no lo heredan y un
     // huérfano no puede retener el lock tras la muerte del demonio (F1).
 
-    ejecutarScheduler();
+    ejecutarScheduler(trabajosMaximos);
 
     _exit(0);
 }
