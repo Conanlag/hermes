@@ -76,3 +76,23 @@ La ejecución real del programa queda fuera del alcance de esta implementación.
 | Consecuencias     | Hermes puede recibir comandos con argumentos, generar identificadores únicos y conservar los Jobs entre diferentes ejecuciones del programa. La ejecución del programa y el control completo de su ciclo de vida quedan pendientes para etapas posteriores.                                             |
 | Riesgos           | Si `jobs.json` se elimina o se encuentra corrupto, Hermes puede perder el historial necesario para determinar el siguiente identificador. Además, buscar el ID recorriendo todos los Jobs puede resultar menos eficiente cuando exista una cantidad muy grande de registros.                            |
 | Evidencia técnica | `crearJob()` lee `data/jobs.json`, determina el siguiente identificador, crea el objeto `Job`, almacena el programa y sus argumentos, agrega el registro al arreglo JSON y vuelve a escribir el archivo. El módulo no ejecuta el programa recibido.                                                     |
+
+---
+
+## Actualización — RF-13: identidad de proceso y cierre ordenado (RNF-30)
+
+La ejecución de Jobs, el control de estados y la cancelación ya están implementados en hitos posteriores. El RF-13 añadió las garantías necesarias para no dejar procesos huérfanos ni filas `RUNNING` mentirosas.
+
+**Identidad persistida.** `guardarPid` persiste `boot_id` (`/proc/sys/kernel/random/boot_id`), `pid_inicio` (campo 22 de `/proc/<pid>/stat`) y `sid`. Un PID solo se considera propio si coinciden `boot_id`, `starttime` y `pgrp == pid`; el `sid` permite reconocer a los miembros del grupo cuando el líder ya no existe.
+
+**Creación del proceso.** `iniciarProceso` usa `fork` + `setpgid(0,0)` + `prctl(PR_SET_PDEATHSIG, SIGKILL)` + `dup2` + `execvp`, en lugar de `posix_spawnp`, porque este último no permite fijar `PDEATHSIG`. El hijo relee `getppid()` tras `prctl` para cerrar la carrera padre-muerto-antes-de-`prctl`. El `errno` de `exec` se reporta por un pipe auxiliar, conservando el mapeo `ENOENT → 127`.
+
+**Descriptores heredados.** El hijo marca `FD_CLOEXEC` en los descriptores 3–1023 antes del `exec`: el demonio es multihilo y otro worker puede tener `jobs.json` abierto en el momento del `fork`. Los locks (`scheduler.lock`, `jobs.lock`) se abren con `O_CLOEXEC`. El rango cubre los descriptores habituales; uno por encima de 1023 no se cubre.
+
+**Cierre ordenado.** Los handlers de `SIGTERM`/`SIGINT` solo escriben un `volatile sig_atomic_t`; no toman locks ni hacen I/O. Un coordinador de hilo único cierra la puerta de arranque (`mutexArranque`), marca los Jobs activos como interrumpidos, señaliza sus grupos (TERM→5 s→KILL), espera a que los workers desregistren y persiste `INTERRUPTED` con `motivo=apagado`. `SA_RESTART` evita que el `EINTR` del apagado haga fallar `read()`/`waitpid()`.
+
+**Grupo sin líder.** `estadoGrupoProceso(pgid, sid)` recorre `/proc`, exige `pgrp` y `session` coincidentes e ignora zombies. Si el líder murió y quedan descendientes, la recuperación termina el grupo completo; si `/proc` no permite verificar, no señaliza y deja `proceso_terminado=false` con `ERROR`.
+
+**Rechazado:** `cgroups v2` (`cgroup.kill`) sería la garantía absoluta frente a Jobs que se daemonizan con `setsid`, pero exige permisos y no aporta frente a los casos cubiertos por el grupo de procesos.
+
+**Evidencia:** TC-022 (a) cierre ordenado, (b) `SIGKILL` con `PDEATHSIG`, (c) no señaliza PIDs ajenos, (h) grupo sin líder con nietos, y auditoría F1 de descriptores. `implementacion-RF-13.md` §2.5 y `docs/ai-usage/23-RF-13-recuperacion-tras-reinicio.md` registran el diseño y la implementación.

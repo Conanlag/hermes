@@ -13,17 +13,62 @@ LOG="$REPO/verif/results/tc015.log"
 : > "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 
-rm -f data/jobs.json
+# Aislamiento: HOME temporal por prueba. Hermes resuelve sus datos con
+# $HOME (data_paths.h), asi que cada test usa su propia carpeta y no toca
+# los datos reales ni depende del symlink src/hermes/data.
+TEST_HOME="$(mktemp -d)"
+export HOME="$TEST_HOME"
+DATA="$HOME/.local/share/hermes/data/jobs.json"
+LOCK="$HOME/.local/share/hermes/data/scheduler.lock"
+
+find_scheduler_pid() {
+    local descriptor target process_path
+    for descriptor in /proc/[0-9]*/fd/*; do
+        [[ -e "$descriptor" ]] || continue
+        target="$(readlink "$descriptor" 2>/dev/null || true)"
+        if [[ "$target" == "$LOCK" ]]; then
+            process_path="${descriptor#/proc/}"
+            printf '%s\n' "${process_path%%/*}"
+            return 0
+        fi
+    done
+    return 0
+}
+
+cleanup() {
+    local scheduler_pid
+    scheduler_pid="$(find_scheduler_pid)"
+    if [[ -n "$scheduler_pid" ]]; then
+        kill "$scheduler_pid" 2>/dev/null || true
+        for _ in $(seq 1 20); do
+            kill -0 "$scheduler_pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
+    rm -rf "$TEST_HOME"
+}
+trap cleanup EXIT
+
+rm -f "$DATA"
 
 # Paso 1: Compilación y ayuda de uso
 make clean && make > /dev/null
 echo "Compilación OK"
 
-H1=$(./hermes 2>&1)
+H1=$(./hermes 2>&1); C1=$?
 H2=$(./hermes --version 2>&1); C2=$?
 H3=$(./hermes --help 2>&1); C3=$?
 
-if echo "$H1" \vert{} grep -qi "uso\Vert{}comando" && [ $C2 -eq 0 ] && [ $C3 -eq 0 ] && echo "$H3" | grep -qi "ejemplos"; then
+# Sin argumentos el binario muestra el banner "HERMES" y sale con 0; la guia
+# completa (uso, comandos, estados, ejemplos y codigos de salida) esta en --help.
+if [ $C1 -eq 0 ] && echo "$H1" | grep -qi "hermes" \
+   && [ $C2 -eq 0 ] && echo "$H2" | grep -qi "version" \
+   && [ $C3 -eq 0 ] \
+   && echo "$H3" | grep -qi "uso" \
+   && echo "$H3" | grep -qi "comando" \
+   && echo "$H3" | grep -qi "estados" \
+   && echo "$H3" | grep -qi "ejemplos" \
+   && echo "$H3" | grep -qi "codigos de salida"; then
     echo "Paso 1 OK (Ayuda, versión y --help correctos)"
 else
     echo "Paso 1 FAIL (Problema con mensajes de ayuda o códigos de salida)"
@@ -34,7 +79,7 @@ fi
 ./hermes job echo hola > /dev/null 2>&1; C_JOB=$?
 ./hermes foo > /dev/null 2>&1; C_FOO=$?
 
-if [ $C_JOB -eq 0 ] && [$C_FOO -eq 1 ]; then
+if [ $C_JOB -eq 0 ] && [ $C_FOO -eq 1 ]; then
     echo "Paso 2 OK (Códigos 0 y 1 devueltos correctamente)"
 else
     echo "Paso 2 FAIL (Códigos devueltos: JOB=$C_JOB, FOO=$C_FOO)"

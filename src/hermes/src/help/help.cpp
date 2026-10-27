@@ -23,7 +23,7 @@ int mostrarAyuda() {
     cout << "  --help                         Muestra esta ayuda" << endl;
     cout << endl;
 
-    cout << "Estados: QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED" << endl;
+    cout << "Estados: QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED" << endl;
     cout << endl;
 
     cout << "Ejemplos:" << endl;

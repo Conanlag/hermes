@@ -30,7 +30,11 @@ std::string EventLog::level_to_string(EventLevel level) {
 }
 
 static bool escribirLineaJsonl(const std::string &ruta, const nlohmann::json &entrada) {
-    int fd = open(ruta.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0644);
+    int fd = open(
+        ruta.c_str(),
+        O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
+        0644
+    );
     if (fd == -1) {
         return false;
     }

@@ -314,7 +314,7 @@ ResultadoValidacion validarStatusTexto(
             false,
             CodigoValidacion::VACIO,
             "Estado vacio. Estados validos: "
-            "QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED"
+            "QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED"
         };
     }
 
@@ -323,7 +323,8 @@ ResultadoValidacion validarStatusTexto(
         status == "RUNNING" ||
         status == "SUCCEEDED" ||
         status == "FAILED" ||
-        status == "CANCELED"
+        status == "CANCELED" ||
+        status == "INTERRUPTED"
     ) {
 
         return {
@@ -345,6 +346,6 @@ ResultadoValidacion validarStatusTexto(
         "Estado no reconocido: " +
         status +
         ". Estados validos: "
-        "QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED"
+        "QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED"
     };
 }

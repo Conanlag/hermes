@@ -13,7 +13,43 @@ LOG="$REPO/verif/results/tc006.log"
 : > "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 
-rm -f data/jobs.json
+# Aislamiento: HOME temporal por prueba. Hermes resuelve sus datos con
+# $HOME (data_paths.h), asi que cada test usa su propia carpeta y no toca
+# los datos reales ni depende del symlink src/hermes/data.
+TEST_HOME="$(mktemp -d)"
+export HOME="$TEST_HOME"
+DATA="$HOME/.local/share/hermes/data/jobs.json"
+LOCK="$HOME/.local/share/hermes/data/scheduler.lock"
+
+find_scheduler_pid() {
+    local descriptor target process_path
+    for descriptor in /proc/[0-9]*/fd/*; do
+        [[ -e "$descriptor" ]] || continue
+        target="$(readlink "$descriptor" 2>/dev/null || true)"
+        if [[ "$target" == "$LOCK" ]]; then
+            process_path="${descriptor#/proc/}"
+            printf '%s\n' "${process_path%%/*}"
+            return 0
+        fi
+    done
+    return 0
+}
+
+cleanup() {
+    local scheduler_pid
+    scheduler_pid="$(find_scheduler_pid)"
+    if [[ -n "$scheduler_pid" ]]; then
+        kill "$scheduler_pid" 2>/dev/null || true
+        for _ in $(seq 1 20); do
+            kill -0 "$scheduler_pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
+    rm -rf "$TEST_HOME"
+}
+trap cleanup EXIT
+
+rm -f "$DATA"
 
 # Paso 1: Compilación
 make clean && make > /dev/null
@@ -59,7 +95,7 @@ else
 fi
 
 # Paso 5: Persistencia en JSON
-if grep -q '"codigo_salida": 0' data/jobs.json && grep -q '"codigo_salida": 3' data/jobs.json; then
+if grep -q '"codigo_salida": 0' "$DATA" && grep -q '"codigo_salida": 3' "$DATA"; then
     echo "Paso 5 OK (Códigos de salida persistidos correctamente en jobs.json)"
 else
     echo "Paso 5 FAIL (No se detectaron los códigos en el JSON)"

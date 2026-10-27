@@ -125,7 +125,7 @@ perl -MJSON::PP -e '
         cancel_requested => JSON::PP::false
     };
     open my $out, ">", $path or die "No se pudo escribir $path: $!";
-    print {$out} JSON::PP->new->canonical->pretty->encode($jobs);
+    print {$out} JSON::PP->new->utf8->canonical->pretty->encode($jobs);
     close $out or die "No se pudo cerrar $path: $!";
 ' "$DATA" "$INTERRUPTED_ID"
 
@@ -134,11 +134,11 @@ perl -MJSON::PP -e '
 ESTADO=""
 for _ in $(seq 1 100); do
     ESTADO="$(read_job_field "$INTERRUPTED_ID" status)"
-    [[ "$ESTADO" == "FAILED" ]] && break
+    [[ "$ESTADO" == "INTERRUPTED" ]] && break
     sleep 0.1
 done
-if [[ "$ESTADO" != "FAILED" ]]; then
-    echo "FAIL: el Job $INTERRUPTED_ID no se recuperó como FAILED."
+if [[ "$ESTADO" != "INTERRUPTED" ]]; then
+    echo "FAIL: el Job $INTERRUPTED_ID no se recuperó como INTERRUPTED."
     exit 1
 fi
 
@@ -169,8 +169,12 @@ if ! perl -MJSON::PP -e '
 
     my $interrupted = $by_id{$interrupted_id}
         or die "Se perdió el Job interrumpido\n";
-    $interrupted->{status} eq "FAILED"
-        or die "El Job interrumpido no quedó en FAILED\n";
+    $interrupted->{status} eq "INTERRUPTED"
+        or die "El Job interrumpido no quedó en INTERRUPTED\n";
+    $interrupted->{motivo} eq "sin_identidad"
+        or die "El motivo del Job interrumpido no es sin_identidad\n";
+    !$interrupted->{proceso_terminado}
+        or die "No se debe afirmar terminación de un proceso no verificable\n";
     $interrupted->{programa} eq "proceso-interrumpido"
         or die "Se perdió el programa del Job interrumpido\n";
     ref($interrupted->{argumentos}) eq "ARRAY" &&
@@ -195,4 +199,4 @@ if ! perl -MJSON::PP -e '
     exit 1
 fi
 
-echo "PASS: los Jobs terminados conservan metadatos y resultados; los RUNNING interrumpidos se recuperan como FAILED."
+echo "PASS: los Jobs terminados conservan metadatos y resultados; los RUNNING no verificables se recuperan como INTERRUPTED."
