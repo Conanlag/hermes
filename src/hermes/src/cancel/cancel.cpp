@@ -3,6 +3,7 @@
 #include "storage.h"
 #include "process.h"
 #include "timestamp.h"
+#include "event_log.h"
 
 #include <string>
 using namespace std;
@@ -65,6 +66,9 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
     }
 
     if (canceladoEnCola) {
+        hermes::EventLog::log_event(jobId, hermes::EventLevel::INFO, "Cancelación", {
+            {"accion", "CANCELADO_EN_COLA"}
+        });
         return {
             true,
             CodigoCancelacion::CANCELADO,
@@ -77,6 +81,9 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
         // el PID. El scheduler detectará la solicitud al guardarlo.
         if (pid > 0) {
             if (!escalarCancelacionProceso(pid, 5)) {
+                hermes::EventLog::log_event(jobId, hermes::EventLevel::ERROR, "Error al escalar cancelación", {
+                    {"pid", pid}
+                });
                 return {
                 false,
                 CodigoCancelacion::ERROR_LECTURA,

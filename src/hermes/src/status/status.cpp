@@ -18,9 +18,12 @@ string statusToString(Status status) {
 
         case Status::CANCELED:
             return "CANCELED";
+
+        case Status::INTERRUPTED:
+            return "INTERRUPTED";
     }
 
-    return "QUEUED";
+    return "INTERRUPTED";
 }
 
 Status statusDesdeTexto(const string& texto) {
@@ -45,5 +48,20 @@ Status statusDesdeTexto(const string& texto) {
         return Status::CANCELED;
     }
 
-    return Status::QUEUED;
+    if (texto == "INTERRUPTED") {
+        return Status::INTERRUPTED;
+    }
+
+    // Fail-closed: un estado que no entendemos no puede reportarse como
+    // pendiente ni reejecutarse. Se trata como interrumpido.
+    return Status::INTERRUPTED;
+}
+
+bool statusEsTextoConocido(const string& texto) {
+    return texto == "QUEUED" ||
+           texto == "RUNNING" ||
+           texto == "SUCCEEDED" ||
+           texto == "FAILED" ||
+           texto == "CANCELED" ||
+           texto == "INTERRUPTED";
 }

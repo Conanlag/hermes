@@ -1,6 +1,7 @@
 #include "job.h"
 #include "storage.h"
 #include "timestamp.h"
+#include "event_log.h"
 #include <functional>
 #include <cstdint>
 #include <climits>
@@ -140,11 +141,20 @@ Job crearJob(
         throw runtime_error("No se pudo registrar el trabajo");
     }
 
+    if (!solicitudExistente) {
+        hermes::EventLog::log_event(nuevo.job_id, hermes::EventLevel::INFO, "Job recibido", {
+            {"programa", nuevo.programa},
+            {"argumentos", nuevo.argumentos}
+        });
+    } else {
+        hermes::EventLog::log_event(nuevo.job_id, hermes::EventLevel::DEBUG, "Solicitud duplicada reutilizada", nlohmann::json::object());
+    }
+
     return nuevo;
 }
 
 bool actualizarEstadoJob(unsigned int jobId, Status nuevoEstado) {
-    return actualizarCampo(jobId, [&](json& item) {
+    bool ok = actualizarCampo(jobId, [&](json& item) {
         item["status"] = statusToString(nuevoEstado);
 
         if (nuevoEstado == Status::RUNNING) {
@@ -153,6 +163,14 @@ bool actualizarEstadoJob(unsigned int jobId, Status nuevoEstado) {
 
         return true;
     });
+
+    if (ok) {
+        hermes::EventLog::log_event(jobId, hermes::EventLevel::INFO, "Cambio de estado", {
+            {"status", statusToString(nuevoEstado)}
+        });
+    }
+
+    return ok;
 }
 
 bool actualizarResultadoJob(
@@ -160,12 +178,21 @@ bool actualizarResultadoJob(
     Status nuevoEstado,
     int codigoSalida
 ) {
-    return actualizarCampo(jobId, [&](json& item) {
+    bool ok = actualizarCampo(jobId, [&](json& item) {
         item["status"] = statusToString(nuevoEstado);
         item["codigo_salida"] = codigoSalida;
         item["tiempo_terminacion"] = obtenerFechaHoraActual();
         return true;
     });
+
+    if (ok) {
+        hermes::EventLog::log_event(jobId, hermes::EventLevel::INFO, "Resultado de ejecución", {
+            {"status", statusToString(nuevoEstado)},
+            {"codigo_salida", codigoSalida}
+        });
+    }
+
+    return ok;
 }
 
 bool marcarCancelacionSolicitada(unsigned int jobId) {

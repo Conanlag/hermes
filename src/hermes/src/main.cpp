@@ -11,6 +11,7 @@
 #include "help.h"
 #include "scheduler.h"
 #include "clean.h"
+#include "event_log.h"
 
 #include <thread>
 #include <chrono>
@@ -152,6 +153,7 @@ int main(int argc, char* argv[]) {
 
         return 0;        
     }
+    
     if (comando == "cancel") {
 
     if (argc < 3) {
@@ -172,21 +174,40 @@ int main(int argc, char* argv[]) {
             stoul(argv[2])
         );
 
+    hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación solicitada", {
+        {"origen", "CLI"},
+        {"accion", "SOLICITUD"}
+    });
+
     ResultadoCancelacion cr = cancelarJobDetallado(id);
 
     if (!cr.exito) {
         if (cr.codigo == CodigoCancelacion::NO_EXISTE) {
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Petición inválida", {
+                {"comando_intentado", "cancel"},
+                {"job_id_intentado", id},
+                {"motivo", "No existe el Job"}
+            });
             error("No existe el Job ID: ", id);
         } else if (cr.codigo == CodigoCancelacion::NO_CANCELABLE) {
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Petición inválida", {
+                {"comando_intentado", "cancel"},
+                {"job_id_intentado", id},
+                {"motivo", "cancelacion_sobre_trabajo_ya_finalizado"},
+                {"estado_actual", "NO_CANCELABLE"}
+            });
             error(cr.mensaje);
         } else {
+            hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Petición inválida", {
+                {"comando_intentado", "cancel"},
+                {"job_id_intentado", id},
+                {"motivo", "No se pudo cancelar el Job"}
+            });
             error("No se pudo cancelar el Job: ", id, ". ", cr.mensaje);
         }
         return 1;
     }
 
-    // QUEUED se cancela directo (ya está CANCELED).
-    // RUNNING queda con solicitud registrada (el supervisor confirma).
     if (cr.codigo == CodigoCancelacion::CANCELADO) {
         info("Job cancelado: ", id);
     } else {

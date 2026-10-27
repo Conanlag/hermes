@@ -79,6 +79,11 @@ inline std::string inicializarDatos() {
         ""
     );
 
+    crearArchivoSiFalta(
+        directorio / "events.jsonl",
+        ""
+    );
+
     return directorio.string();
 }
 
@@ -88,6 +93,10 @@ inline std::string rutaDatos(const std::string& nombreArchivo) {
     return (
         std::filesystem::path(directorio) / nombreArchivo
     ).string();
+}
+
+inline std::string rutaEventsLog() {
+    return rutaDatos("events.jsonl");
 }
 
 } // namespace hermes

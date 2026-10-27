@@ -14,6 +14,41 @@ LOG="$REPO/verif/results/tc001.log"
 : > "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 
+# Aislamiento: HOME temporal por prueba. Hermes resuelve sus datos con
+# $HOME (data_paths.h), asi que cada test usa su propia carpeta y no toca
+# los datos reales ni depende del symlink src/hermes/data.
+TEST_HOME="$(mktemp -d)"
+export HOME="$TEST_HOME"
+LOCK="$HOME/.local/share/hermes/data/scheduler.lock"
+
+find_scheduler_pid() {
+    local descriptor target process_path
+    for descriptor in /proc/[0-9]*/fd/*; do
+        [[ -e "$descriptor" ]] || continue
+        target="$(readlink "$descriptor" 2>/dev/null || true)"
+        if [[ "$target" == "$LOCK" ]]; then
+            process_path="${descriptor#/proc/}"
+            printf '%s\n' "${process_path%%/*}"
+            return 0
+        fi
+    done
+    return 0
+}
+
+cleanup() {
+    local scheduler_pid
+    scheduler_pid="$(find_scheduler_pid)"
+    if [[ -n "$scheduler_pid" ]]; then
+        kill "$scheduler_pid" 2>/dev/null || true
+        for _ in $(seq 1 20); do
+            kill -0 "$scheduler_pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
+    rm -rf "$TEST_HOME"
+}
+trap cleanup EXIT
+
 FALLOS=0
 
 # Paso 1: compilación limpia
@@ -23,11 +58,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "Compilación OK"
-
-# Respaldo persistente de jobs.json
-if [ -f data/jobs.json ]; then
-    cp data/jobs.json "$REPO/verif/results/jobs_tc001_backup.json"
-fi
 
 # Paso 2: trabajo válido
 OUT=$(./hermes job echo hola 2>&1)
@@ -84,11 +114,6 @@ if [ $? -eq 1 ] && echo "$SALIDA" | grep -qi "no reconocido"; then
 else
     echo "Paso 7 FAIL"
     FALLOS=1
-fi
-
-# Restaurar respaldo
-if [ -f "$REPO/verif/results/jobs_tc001_backup.json" ]; then
-    cp "$REPO/verif/results/jobs_tc001_backup.json" data/jobs.json
 fi
 
 if [ $FALLOS -eq 0 ]; then
