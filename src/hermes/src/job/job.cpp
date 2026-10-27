@@ -153,47 +153,6 @@ Job crearJob(
     return nuevo;
 }
 
-bool actualizarEstadoJob(unsigned int jobId, Status nuevoEstado) {
-    bool ok = actualizarCampo(jobId, [&](json& item) {
-        item["status"] = statusToString(nuevoEstado);
-
-        if (nuevoEstado == Status::RUNNING) {
-            item["tiempo_inicio"] = obtenerFechaHoraActual();
-        }
-
-        return true;
-    });
-
-    if (ok) {
-        hermes::EventLog::log_event(jobId, hermes::EventLevel::INFO, "Cambio de estado", {
-            {"status", statusToString(nuevoEstado)}
-        });
-    }
-
-    return ok;
-}
-
-bool actualizarResultadoJob(
-    unsigned int jobId,
-    Status nuevoEstado,
-    int codigoSalida
-) {
-    bool ok = actualizarCampo(jobId, [&](json& item) {
-        item["status"] = statusToString(nuevoEstado);
-        item["codigo_salida"] = codigoSalida;
-        item["tiempo_terminacion"] = obtenerFechaHoraActual();
-        return true;
-    });
-
-    if (ok) {
-        hermes::EventLog::log_event(jobId, hermes::EventLevel::INFO, "Resultado de ejecución", {
-            {"status", statusToString(nuevoEstado)},
-            {"codigo_salida", codigoSalida}
-        });
-    }
-
-    return ok;
-}
 
 bool marcarCancelacionSolicitada(unsigned int jobId) {
     return actualizarCampo(jobId, [&](json& item) {

@@ -1,20 +1,15 @@
 #include "filter.h"
 #include "job.h"
 #include "status.h"
-#include "data_paths.h"
+#include "storage.h"
 
-
-#include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include "terminal.colors.h"
 
-using std::ifstream;
 using std::cout;
 using std::endl;
 using json = nlohmann::json;
-
-const string archivoJobs = hermes::rutaDatos("jobs.json");  // Ruta donde se lee el json con datos de jobs
 
 // ### Filtro por Id ###
 void filtrarPorId(unsigned int job_id){
@@ -62,29 +57,14 @@ void filtrarPorId(unsigned int job_id){
 // ### Filtro por Status ###
 
 void filtrarPorStatus(const string& status){
-    json jobs = json::array();
-    
-    ifstream archivoLectura(archivoJobs);
-    
-    // Intentar leer json de jobs
-    if (!archivoLectura.is_open()) {
-        cout << "No se pudo abrir " << archivoJobs << endl;
-        error("No se puede abrir: ", archivoJobs);
-        return;
-    }
+    json jobs;
 
-    // Leer json
     try {
-        archivoLectura >> jobs;
-    } catch (const json::parse_error&) {
-        cout << "Error al leer " << archivoJobs << endl;
-        error("Error al leer: ", archivoJobs);
-
-        archivoLectura.close();
+        jobs = leerJobsSeguros();
+    } catch (const std::exception& e) {
+        error("Error al leer jobs: ", e.what());
         return;
     }
-
-    archivoLectura.close();
 
     bool encontrado = false;
 
@@ -153,27 +133,14 @@ void filtrarPorStatus(const string& status){
 // ### Filtro por programa ###
 
 void filtrarPorPrograma(const string& programa){
+    json jobs;
 
-     json jobs = json::array();
-    
-    ifstream archivoLectura(archivoJobs);
-    
-    // Intentar leer json de jobs
-    if (!archivoLectura.is_open()) {
-        error("No se pudo abrir", archivoJobs);
-        return;
-    }
-
-    // Leer json
     try {
-        archivoLectura >> jobs;
-    } catch (const json::parse_error&) {
-        error("Error al leer: ", archivoJobs);
-        archivoLectura.close();
+        jobs = leerJobsSeguros();
+    } catch (const std::exception& e) {
+        error("Error al leer jobs: ", e.what());
         return;
     }
-
-    archivoLectura.close();
 
     bool encontrado = false;
 

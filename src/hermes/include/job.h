@@ -38,17 +38,6 @@ Job crearJob(
 );
 
 
-bool actualizarEstadoJob(
-    unsigned int jobId,
-    Status nuevoEstado
-);
-
-
-bool actualizarResultadoJob(
-    unsigned int jobId,
-    Status nuevoEstado,
-    int codigoSalida
-);
 
 
 bool marcarCancelacionSolicitada(
