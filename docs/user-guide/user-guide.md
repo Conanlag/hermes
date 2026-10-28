@@ -190,9 +190,9 @@ Al ejecutar Hermes por primera vez, se crean el directorio y los archivos que fa
 | Archivo | Para qué sirve |
 | ------- | -------------- |
 | `jobs.json` | Guarda los Jobs creados y sus datos, como ID, programa, argumentos, estado y resultado. |
-| `config.json` | Contiene la configuración inicial `trabajos_maximos: 5`. Actualmente Hermes crea este valor, pero todavía no lo usa para ajustar la cantidad de trabajos simultáneos. |
+| `config.json` | Configura `trabajos_maximos`, el máximo de trabajos simultáneos (de 1 a 64). Hermes lee el valor cuando inicia el scheduler. |
 | `jobs.lock` | Archivo interno para coordinar escrituras simultáneas en los datos de Jobs. No se debe borrar mientras Hermes está trabajando. |
-| `scheduler.lock` | Archivo interno que permite detectar si ya está activo el scheduler de Hermes. No se debe borrar mientras Hermes está trabajando. |
+| `scheduler.lock` | Archivo interno que permite detectar si ya está activo el scheduler de Hermes. No se debe borrar ni editar manualmente. |
 
 Desde la raíz del repositorio puedes comprobar el destino del enlace simbólico; desde cualquier ubicación puedes listar los datos persistentes:
 
@@ -213,9 +213,17 @@ Hermes cuenta actualmente con los siguientes comandos:
 hermes job
 hermes filter
 hermes cancel
+hermes clean data
+hermes clean scheduler
 hermes --version
 hermes --help
 ```
+
+`hermes clean scheduler` solicita el apagado ordenado del scheduler actual y
+espera a que termine. Los trabajos que estuvieran ejecutándose se detienen y
+quedan registrados como `INTERRUPTED`; los trabajos en cola se conservan. El
+siguiente comando que necesite el scheduler lo iniciará de nuevo y leerá la
+configuración vigente. No es necesario borrar `scheduler.lock`.
 
 ---
 

@@ -16,7 +16,7 @@
 
 Datos persistentes:
 - `jobs.json` contiene los Jobs y sus resultados.
-- `config.json` se inicializa con `trabajos_maximos: 5`; actualmente el código no lo lee para configurar el scheduler.
+- `config.json` configura `trabajos_maximos` (predeterminado 5, rango 1–64), que determina la cantidad de workers concurrentes al iniciar el scheduler. Para aplicar cambios a un daemon activo se usa `hermes clean scheduler`; el siguiente comando operativo carga la nueva configuración.
 - `jobs.lock` coordina las modificaciones concurrentes de los datos.
 - `scheduler.lock` impide que se inicie un segundo scheduler mientras el primero conserva el bloqueo.
 

@@ -72,7 +72,7 @@ La ruta resuelta debe apuntar al directorio:
 $HOME/.local/share/hermes/data
 ```
 
-Dentro de `data` Hermes crea y mantiene `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`. `jobs.json` guarda los Jobs; `config.json` contiene la configuración inicial `trabajos_maximos: 5` (actualmente no se lee para configurar el scheduler); `jobs.lock` coordina las escrituras concurrentes; y `scheduler.lock` evita iniciar más de un scheduler a la vez.
+Dentro de `data` Hermes crea y mantiene `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`. `jobs.json` guarda los Jobs; `config.json` configura `trabajos_maximos` (de 1 a 64, predeterminado 5) al iniciar el scheduler; `jobs.lock` coordina las escrituras concurrentes; y `scheduler.lock` evita iniciar más de un scheduler a la vez. Para aplicar cambios de concurrencia sin buscar el PID manualmente, ejecuta `hermes clean scheduler`; no borres el archivo de bloqueo.
 
 ## Configuración del código fuente
 
