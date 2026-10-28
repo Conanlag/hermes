@@ -47,14 +47,20 @@ int main(int argc, char* argv[]) {
         return mostrarAyuda();
     }
     if (comando == "clean") {
-    if (argc != 3 || string(argv[2]) != "data") {
-        error("Uso: hermes clean data");
-        return 1;
+        const string objetivo = argc == 3 ? argv[2] : "";
+        const ResultadoValidacion validacionClean =
+            validarObjetivoClean(objetivo);
+        if (!validacionClean.esValido || argc != 3) {
+            error("Uso: hermes clean data | scheduler");
+            return 1;
+        }
+
+        if (objetivo == "data") {
+            return limpiarDatos();
+        }
+
+        return detenerSchedulerOrdenadamente();
     }
-
-    return limpiarDatos();
-}
-
 
     try {
         const auto config = hermes::cargarConfiguracion();

@@ -3,5 +3,6 @@
 
 void iniciarSchedulerSiNecesario(int trabajosMaximos = 5);
 void ejecutarScheduler(int trabajosMaximos = 5);
+int detenerSchedulerOrdenadamente();
 
 #endif

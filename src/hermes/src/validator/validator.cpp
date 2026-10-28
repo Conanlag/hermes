@@ -56,6 +56,32 @@ ResultadoValidacion validarComando(const string& comando) {
     };
 }
 
+ResultadoValidacion validarObjetivoClean(const string& objetivo) {
+    if (objetivo == "data" || objetivo == "scheduler") {
+        return {
+            true,
+            CodigoValidacion::OK,
+            ""
+        };
+    }
+
+    hermes::EventLog::log_event_system(
+        hermes::EventLevel::WARN,
+        "Rechazo de Validación",
+        {
+            {"comando_intentado", "clean"},
+            {"objetivo_intentado", objetivo},
+            {"motivo_del_rechazo", "Objetivo de clean no válido"}
+        }
+    );
+
+    return {
+        false,
+        CodigoValidacion::MALFORMADO,
+        "Uso: hermes clean data | scheduler"
+    };
+}
+
 
 ResultadoValidacion validarPrograma(const string& programa) {
 

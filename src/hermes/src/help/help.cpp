@@ -19,6 +19,7 @@ int mostrarAyuda() {
     cout << "  filter programa <nombre>       Lista trabajos por programa" << endl;
     cout << "  cancel <id>                    Cancela un trabajo en cola o en ejecucion" << endl;
     cout << "  clean data                     Limpia el historial de trabajos finalizados" << endl;
+    cout << "  clean scheduler                Detiene el scheduler ordenadamente" << endl;
     cout << "  --version                      Muestra la version" << endl;
     cout << "  --help                         Muestra esta ayuda" << endl;
     cout << endl;
@@ -33,6 +34,7 @@ int mostrarAyuda() {
     cout << "  hermes filter status RUNNING" << endl;
     cout << "  hermes cancel 1" << endl;
     cout << "  hermes clean data" << endl;
+    cout << "  hermes clean scheduler" << endl;
     cout << endl;
 
     cout << "Codigos de salida: 0 exito, 1 error" << endl;

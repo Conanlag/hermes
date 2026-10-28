@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "process.h"
 
 #include <unistd.h>

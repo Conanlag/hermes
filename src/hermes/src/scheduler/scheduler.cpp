@@ -8,10 +8,15 @@
 #include "timestamp.h"
 #include "data_paths.h"
 #include "event_log.h"
+#include "terminal.colors.h"
 
 #include <chrono>
 #include <cerrno>
 #include <condition_variable>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -20,10 +25,12 @@
 #include <stdexcept>
 #include <exception>
 #include <cstring>
+#include <cstdlib>
 #include <utility>
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -104,6 +111,121 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
     trabajo.programa = std::move(programaReservado);
     trabajo.argumentos = std::move(argumentosReservados);
     trabajo.request_id = std::move(requestIdReservado);
+
+    return true;
+}
+
+bool leerPidScheduler(int descriptor, pid_t& pid) {
+    char contenido[32] = {};
+    const ssize_t bytes = pread(
+        descriptor,
+        contenido,
+        sizeof(contenido) - 1,
+        0
+    );
+
+    if (bytes <= 0) {
+        return false;
+    }
+
+    char* fin = nullptr;
+    errno = 0;
+    const long valor = strtol(contenido, &fin, 10);
+
+    if (errno != 0 || fin == contenido || valor <= 0) {
+        return false;
+    }
+
+    while (*fin == ' ' || *fin == '\t' || *fin == '\n' || *fin == '\r') {
+        ++fin;
+    }
+
+    if (*fin != '\0') {
+        return false;
+    }
+
+    pid = static_cast<pid_t>(valor);
+    return true;
+}
+
+bool buscarPidSchedulerPorDescriptor(int descriptor, pid_t& pid) {
+    struct stat archivoLock {};
+    if (fstat(descriptor, &archivoLock) == -1) {
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    std::error_code errorIterador;
+    for (fs::directory_iterator proceso("/proc", errorIterador), fin;
+         !errorIterador && proceso != fin;
+         proceso.increment(errorIterador)) {
+        const string nombrePid = proceso->path().filename().string();
+        char* finPid = nullptr;
+        const long valorPid = strtol(nombrePid.c_str(), &finPid, 10);
+
+        if (finPid == nombrePid.c_str() || *finPid != '\0' ||
+            valorPid <= 0 ||
+            valorPid > std::numeric_limits<pid_t>::max() ||
+            valorPid == getpid()) {
+            continue;
+        }
+
+        const fs::path rutaProceso = proceso->path();
+        ifstream cmdline(rutaProceso / "cmdline", ios::binary);
+        string ejecutable;
+        string comando;
+        getline(cmdline, ejecutable, '\0');
+        getline(cmdline, comando, '\0');
+
+        if (comando == "clean") {
+            continue;
+        }
+
+        std::error_code errorDescriptores;
+        for (fs::directory_iterator descriptor(
+                 rutaProceso / "fd",
+                 errorDescriptores
+             ), finDescriptor;
+             !errorDescriptores && descriptor != finDescriptor;
+             descriptor.increment(errorDescriptores)) {
+            struct stat archivoAbierto {};
+            if (stat(descriptor->path().c_str(), &archivoAbierto) == 0 &&
+                archivoAbierto.st_dev == archivoLock.st_dev &&
+                archivoAbierto.st_ino == archivoLock.st_ino) {
+                pid = static_cast<pid_t>(valorPid);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool escribirPidScheduler(int descriptor, pid_t pid) {
+    if (ftruncate(descriptor, 0) == -1) {
+        return false;
+    }
+
+    const string contenido = to_string(pid) + "\n";
+    ssize_t escritos = 0;
+
+    while (escritos < static_cast<ssize_t>(contenido.size())) {
+        const ssize_t resultado = pwrite(
+            descriptor,
+            contenido.data() + escritos,
+            contenido.size() - static_cast<size_t>(escritos),
+            escritos
+        );
+
+        if (resultado == -1 && errno == EINTR) {
+            continue;
+        }
+        if (resultado <= 0) {
+            return false;
+        }
+
+        escritos += resultado;
+    }
 
     return true;
 }
@@ -348,32 +470,6 @@ void finalizarTrabajo(
         }
         hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Transición a FAILED", ctx);
     }
-}
-
-void finalizarTrabajo(
-    unsigned int id,
-    int codigoSalida,
-    bool procesoValido
-) {
-    ResultadoProceso res;
-    res.completado = procesoValido;
-    if (procesoValido) {
-        if (codigoSalida >= 0) {
-            res.salidoNormalmente = true;
-            res.codigoSalida = codigoSalida;
-        } else {
-            res.terminadoPorSenal = true;
-            res.numeroSenal = -codigoSalida;
-            res.codigoSalida = codigoSalida;
-            res.nombreSenal = obtenerNombreSenal(res.numeroSenal);
-            const char* desc = strsignal(res.numeroSenal);
-            res.descripcionSenal = (desc != nullptr && desc[0] != '\0') ? desc : "señal desconocida";
-        }
-    } else {
-        res.codigoSalida = -1;
-    }
-
-    finalizarTrabajo(id, res);
 }
 
 void registrarFallo(
@@ -1057,6 +1153,101 @@ void ejecutarScheduler(int trabajosMaximos) {
     coordinador.join();
 }
 
+int detenerSchedulerOrdenadamente() {
+    const string rutaLock = hermes::rutaDatos("scheduler.lock");
+    const int descriptor = open(
+        rutaLock.c_str(),
+        O_RDWR | O_CREAT | O_CLOEXEC,
+        0644
+    );
+
+    if (descriptor == -1) {
+        error(
+            "No se pudo abrir scheduler.lock: ",
+            std::strerror(errno)
+        );
+        return 1;
+    }
+
+    bool senalEnviada = false;
+    const auto inicio = steady_clock::now();
+    const auto limite = steady_clock::now() + seconds(30);
+
+    while (steady_clock::now() < limite) {
+        if (flock(descriptor, LOCK_EX | LOCK_NB) == 0) {
+            const int resultadoLimpieza = ftruncate(descriptor, 0);
+            const int errorLimpieza =
+                resultadoLimpieza == -1 ? errno : 0;
+            flock(descriptor, LOCK_UN);
+            close(descriptor);
+
+            if (resultadoLimpieza == -1) {
+                error(
+                    "El scheduler terminó, pero no se pudo limpiar su "
+                    "identificador: ",
+                    std::strerror(errorLimpieza)
+                );
+                return 1;
+            }
+
+            if (senalEnviada) {
+                info("Scheduler detenido correctamente.");
+            } else {
+                info("No había un scheduler activo.");
+            }
+            return 0;
+        }
+
+        if (errno != EWOULDBLOCK && errno != EAGAIN) {
+            const int errorLock = errno;
+            close(descriptor);
+            error(
+                "No se pudo comprobar el estado del scheduler: ",
+                std::strerror(errorLock)
+            );
+            return 1;
+        }
+
+        if (!senalEnviada) {
+            pid_t pid = 0;
+            bool pidEncontrado = leerPidScheduler(descriptor, pid);
+
+            // Un daemon de una versión anterior no escribió su PID en el
+            // archivo. Esperar brevemente también evita leer el PID del CLI
+            // que acaba de iniciar un daemon nuevo.
+            if (!pidEncontrado &&
+                steady_clock::now() - inicio >= milliseconds(500)) {
+                pidEncontrado =
+                    buscarPidSchedulerPorDescriptor(descriptor, pid);
+            }
+
+            if (pidEncontrado) {
+                if (kill(pid, SIGTERM) == 0) {
+                    senalEnviada = true;
+                } else if (errno != ESRCH) {
+                    const int errorSenal = errno;
+                    close(descriptor);
+                    error(
+                        "No se pudo solicitar el apagado del scheduler: ",
+                        std::strerror(errorSenal)
+                    );
+                    return 1;
+                }
+            }
+        }
+
+        sleep_for(milliseconds(50));
+    }
+
+    close(descriptor);
+    error(
+        senalEnviada
+            ? "El scheduler no liberó scheduler.lock en 30 segundos."
+            : "No se pudo identificar al scheduler activo en 30 segundos."
+    );
+    return 1;
+}
+
 void iniciarSchedulerSiNecesario(int trabajosMaximos) {
     const string rutaLock =
         hermes::rutaDatos("scheduler.lock");
@@ -1084,6 +1275,16 @@ void iniciarSchedulerSiNecesario(int trabajosMaximos) {
     if (flock(descriptor, LOCK_EX | LOCK_NB) == -1) {
         close(descriptor);
         return;
+    }
+
+    if (ftruncate(descriptor, 0) == -1) {
+        const int errorTruncado = errno;
+        flock(descriptor, LOCK_UN);
+        close(descriptor);
+        throw runtime_error(
+            "No se pudo preparar scheduler.lock: " +
+            string(std::strerror(errorTruncado))
+        );
     }
 
     // Somos el único supervisor posible. La recuperación ocurre aquí, en el
@@ -1135,6 +1336,19 @@ void iniciarSchedulerSiNecesario(int trabajosMaximos) {
     }
 
     if (setsid() == -1) {
+        _exit(1);
+    }
+
+    if (!escribirPidScheduler(descriptor, getpid())) {
+        hermes::EventLog::log_event_system(
+            hermes::EventLevel::ERROR,
+            "No se pudo registrar el PID del scheduler",
+            {
+                {"archivo", "scheduler.lock"},
+                {"errno", errno},
+                {"detalle", std::strerror(errno)}
+            }
+        );
         _exit(1);
     }
 

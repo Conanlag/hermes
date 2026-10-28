@@ -20,6 +20,8 @@ struct ResultadoValidacion {
 
 ResultadoValidacion validarComando(const string& comando);
 
+ResultadoValidacion validarObjetivoClean(const string& objetivo);
+
 ResultadoValidacion validarPrograma(const string& programa);
 
 ResultadoValidacion validarRequestId(const string& requestId);
