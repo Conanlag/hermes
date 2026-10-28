@@ -391,6 +391,22 @@ void recuperarTrabajosInterrumpidos() {
             contexto["pid"] = static_cast<int>(clasificacion.pid);
         }
 
+        // RNF-22/RNF-31: enriquecer con request_id si existe para trazabilidad
+        try {
+            json jobs = leerJobsSeguros();
+            if (clasificacion.indice < jobs.size() && jobs[clasificacion.indice].is_object()) {
+                const auto& itemJob = jobs[clasificacion.indice];
+                if (itemJob.contains("request_id") && itemJob["request_id"].is_string()) {
+                    const string rid = itemJob["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        contexto["request_id"] = rid;
+                    }
+                }
+            }
+        } catch (...) {
+            // No bloquear el log si no se puede leer request_id
+        }
+
         EventLog::log_event(
             clasificacion.jobId,
             EventLevel::INFO,
