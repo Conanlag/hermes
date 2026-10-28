@@ -45,6 +45,11 @@ void filtrarPorId(unsigned int job_id){
     cout << "Terminacion: "
          << job.tiempo_terminacion << endl;
 
+    if (!job.mensajeError.empty()) {
+        cout << "Mensaje de error: "
+             << job.mensajeError << endl;
+    }
+
     cout << "Argumentos: ";
 
     for (const auto& argumento : job.argumentos) {

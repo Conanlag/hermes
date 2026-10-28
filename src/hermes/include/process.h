@@ -116,6 +116,38 @@ pid_t iniciarProceso(
 
 
 /**
+ * Resultado detallado de la terminación de un proceso hijo (RF-29).
+ */
+struct ResultadoProceso {
+    bool completado = false;
+    bool salidoNormalmente = false;
+    int codigoSalida = 0;
+    bool terminadoPorSenal = false;
+    int numeroSenal = 0;
+    string nombreSenal;
+    string descripcionSenal;
+    bool coreDump = false;
+};
+
+/**
+ * Obtiene el nombre simbólico de una señal POSIX (ej. SIGSEGV, SIGKILL).
+ */
+string obtenerNombreSenal(int senal);
+
+/**
+ * Espera a que termine un proceso con diagnóstico estructurado (RF-29).
+ *
+ * @param pid PID del proceso.
+ * @param resultado Estructura donde se guarda el resultado detallado.
+ *
+ * @return true si se pudo cosechar y diagnosticar el proceso correctamente.
+ */
+bool esperarProceso(
+    pid_t pid,
+    ResultadoProceso& resultado
+);
+
+/**
  * Espera a que termine un proceso.
  *
  * @param pid PID del proceso.
