@@ -240,8 +240,22 @@ void actualizarRespaldo(const string& ruta, const string& respaldo) {
 }
 
 void guardarAtomico(const json& jobs) {
+    // Escritura atómica: tmp + fsync + rename + fsync(dir)
     const string ruta = hermes::rutaDatos(NOMBRE_JOBS);
     const string respaldo = hermes::rutaDatos(NOMBRE_RESPALDO);
+
+    namespace fs = std::filesystem;
+
+    const fs::path rutaPath(ruta);
+    const fs::path dirPath = rutaPath.parent_path();
+
+    if (dirPath.empty()) {
+        throw runtime_error("No se pudo determinar el directorio de datos para escritura atómica");
+    }
+
+    std::error_code errorEquiv;
+    const fs::path dirCheck = dirPath;
+    (void)errorEquiv;
 
     // PID + contador: dos escrituras concurrentes nunca comparten temporal
     // aunque compartan proceso. O_EXCL convierte cualquier colisión en error
@@ -299,6 +313,12 @@ void guardarAtomico(const json& jobs) {
 
         if (rename(temporal.c_str(), ruta.c_str()) == -1) {
             const int error = errno;
+
+            if (error == EXDEV) {
+                throw runtime_error(
+                    "No se pudo actualizar jobs.json: origen y destino en distintos sistemas de archivos (rename atómico no soportado)"
+                );
+            }
 
             throw runtime_error(
                 string("No se pudo actualizar jobs.json: ") +
