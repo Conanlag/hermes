@@ -35,18 +35,18 @@ using namespace std::chrono;
 
 namespace {
 
-constexpr int NUM_TRABAJADORES = 5;
-
 struct TrabajoPendiente {
     unsigned int id = 0;
     string programa;
     vector<string> argumentos;
+    string request_id;
 };
 
 bool reservarTrabajo(TrabajoPendiente& trabajo) {
     unsigned int idReservado = 0;
     string programaReservado;
     vector<string> argumentosReservados;
+    string requestIdReservado;
 
     const bool reservado = modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
@@ -76,6 +76,12 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
                 }
             }
 
+            if (item.contains("request_id") && item["request_id"].is_string()) {
+                requestIdReservado = item["request_id"].get<string>();
+            } else {
+                requestIdReservado.clear();
+            }
+
             item["status"] = "RUNNING";
             item["pid"] = 0;
             item["tiempo_inicio"] = obtenerFechaHoraActual();
@@ -97,6 +103,7 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
     trabajo.id = idReservado;
     trabajo.programa = std::move(programaReservado);
     trabajo.argumentos = std::move(argumentosReservados);
+    trabajo.request_id = std::move(requestIdReservado);
 
     return true;
 }
@@ -175,9 +182,26 @@ bool guardarPid(
         return false;
     }
 
-    hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a RUNNING", {
-        {"pid", static_cast<int>(pid)}
-    });
+    {
+        nlohmann::json ctxRunning;
+        ctxRunning["pid"] = static_cast<int>(pid);
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxRunning["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+            // No bloquear el flujo si no se puede leer request_id
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a RUNNING", ctxRunning);
+    }
 
     if (!hayIdentidad) {
         hermes::EventLog::log_event(id, hermes::EventLevel::WARN, "Identidad de proceso no verificable", {
@@ -199,16 +223,25 @@ bool guardarPid(
 
 void finalizarTrabajo(
     unsigned int id,
-    int codigoSalida,
-    bool procesoValido
+    const ResultadoProceso& resultado
 ) {
     bool fueCancelado = false;
     bool fueExitoso = false;
     bool fueFallido = false;
-    int signalNumber = 0;
+    string mensajeDiagnostico;
 
-    if (procesoValido && codigoSalida < 0) {
-        signalNumber = -codigoSalida;
+    if (resultado.terminadoPorSenal) {
+        string desc = resultado.descripcionSenal.empty() ? "señal desconocida" : resultado.descripcionSenal;
+        mensajeDiagnostico = "Terminado por señal fatal " +
+            resultado.nombreSenal + " (" +
+            to_string(resultado.numeroSenal) + "): " +
+            desc +
+            (resultado.coreDump ? " (core dumped)" : "");
+    } else if (!resultado.salidoNormalmente && !resultado.completado) {
+        mensajeDiagnostico = "Error al esperar la terminación del proceso";
+    } else if (resultado.codigoSalida != 0) {
+        mensajeDiagnostico = "El proceso terminó con código de error " +
+            to_string(resultado.codigoSalida);
     }
 
     modificarJobsSeguros([&](json& jobs) {
@@ -226,15 +259,18 @@ void finalizarTrabajo(
             if (cancelar) {
                 item["status"] = "CANCELED";
                 fueCancelado = true;
-            } else if (procesoValido && codigoSalida == 0) {
+            } else if (resultado.salidoNormalmente && resultado.codigoSalida == 0) {
                 item["status"] = "SUCCEEDED";
                 fueExitoso = true;
             } else {
                 item["status"] = "FAILED";
                 fueFallido = true;
+                if (!mensajeDiagnostico.empty()) {
+                    item["mensaje_error"] = mensajeDiagnostico;
+                }
             }
 
-            item["codigo_salida"] = codigoSalida;
+            item["codigo_salida"] = resultado.codigoSalida;
             item["tiempo_terminacion"] =
                 obtenerFechaHoraActual();
 
@@ -245,22 +281,99 @@ void finalizarTrabajo(
     });
 
     if (fueCancelado) {
-        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", {
-            {"estado_previo", "RUNNING"},
-            {"exit_code", codigoSalida}
-        });
+        nlohmann::json ctxCanc;
+        ctxCanc["estado_previo"] = "RUNNING";
+        ctxCanc["exit_code"] = resultado.codigoSalida;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxCanc["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", ctxCanc);
     } else if (fueExitoso) {
-        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a SUCCEEDED", {
-            {"exit_code", codigoSalida}
-        });
+        nlohmann::json ctxOk;
+        ctxOk["exit_code"] = resultado.codigoSalida;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxOk["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a SUCCEEDED", ctxOk);
     } else if (fueFallido) {
         nlohmann::json ctx;
-        ctx["exit_code"] = codigoSalida;
-        if (signalNumber > 0) {
-            ctx["signal_number"] = signalNumber;
+        ctx["exit_code"] = resultado.codigoSalida;
+        if (resultado.terminadoPorSenal) {
+            ctx["signal_number"] = resultado.numeroSenal;
+            ctx["signal_name"] = resultado.nombreSenal;
+            if (!resultado.descripcionSenal.empty()) {
+                ctx["signal_description"] = resultado.descripcionSenal;
+            }
+            ctx["core_dump"] = resultado.coreDump;
+            ctx["anomalous_termination"] = true;
+        }
+        if (!mensajeDiagnostico.empty()) {
+            ctx["detalle"] = mensajeDiagnostico;
+        }
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctx["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
         }
         hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Transición a FAILED", ctx);
     }
+}
+
+void finalizarTrabajo(
+    unsigned int id,
+    int codigoSalida,
+    bool procesoValido
+) {
+    ResultadoProceso res;
+    res.completado = procesoValido;
+    if (procesoValido) {
+        if (codigoSalida >= 0) {
+            res.salidoNormalmente = true;
+            res.codigoSalida = codigoSalida;
+        } else {
+            res.terminadoPorSenal = true;
+            res.numeroSenal = -codigoSalida;
+            res.codigoSalida = codigoSalida;
+            res.nombreSenal = obtenerNombreSenal(res.numeroSenal);
+            const char* desc = strsignal(res.numeroSenal);
+            res.descripcionSenal = (desc != nullptr && desc[0] != '\0') ? desc : "señal desconocida";
+        }
+    } else {
+        res.codigoSalida = -1;
+    }
+
+    finalizarTrabajo(id, res);
 }
 
 void registrarFallo(
@@ -313,16 +426,44 @@ void registrarFallo(
     }
 
     if (fueCancelado) {
-        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", {
-            {"estado_previo", "RUNNING"},
-            {"exit_code", codigoSalida},
-            {"detalle", mensaje}
-        });
+        nlohmann::json ctxCanc2;
+        ctxCanc2["estado_previo"] = "RUNNING";
+        ctxCanc2["exit_code"] = codigoSalida;
+        ctxCanc2["detalle"] = mensaje;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxCanc2["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", ctxCanc2);
     } else {
         nlohmann::json ctx;
         ctx["exit_code"] = codigoSalida;
         ctx["detalle"] = mensaje;
         ctx["errno"] = errno;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctx["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
         hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Error interno del daemon", ctx);
     }
 }
@@ -658,6 +799,7 @@ void trabajador() {
                 // Se recoge para no dejar un zombie y se reporta el fallo
                 // en lugar de afirmar una transición a RUNNING.
                 close(pipeStderr);
+                pipeStderr = -1;
 
                 int codigoDescartado = -1;
                 esperarProceso(pid, codigoDescartado);
@@ -691,6 +833,11 @@ void trabajador() {
         } catch (const exception& e) {
             const bool teniaReserva = trabajo.id != 0;
             bloqueoArranque.unlock();
+
+            if (pipeStderr >= 0) {
+                close(pipeStderr);
+                pipeStderr = -1;
+            }
 
             if (pid > 0 && !procesoRegistrado) {
                 // El spawn ocurrió pero el registro falló: sin una entrada en
@@ -730,6 +877,11 @@ void trabajador() {
         } catch (...) {
             const bool teniaReserva = trabajo.id != 0;
             bloqueoArranque.unlock();
+
+            if (pipeStderr >= 0) {
+                close(pipeStderr);
+                pipeStderr = -1;
+            }
 
             if (pid > 0 && !procesoRegistrado) {
                 kill(pid, SIGKILL);
@@ -780,10 +932,13 @@ void trabajador() {
                 }
             }
 
-            close(pipeStderr);
+            if (pipeStderr >= 0) {
+                close(pipeStderr);
+                pipeStderr = -1;
+            }
 
-            int codigoSalida = -1;
-            bool valido = esperarProceso(pid, codigoSalida);
+            ResultadoProceso resultado;
+            esperarProceso(pid, resultado);
 
             const bool interrumpido =
                 desregistrarTrabajoActivo(trabajo.id);
@@ -798,11 +953,15 @@ void trabajador() {
 
             finalizarTrabajo(
                 trabajo.id,
-                codigoSalida,
-                valido
+                resultado
             );
 
         } catch (const exception& e) {
+            if (pipeStderr >= 0) {
+                close(pipeStderr);
+                pipeStderr = -1;
+            }
+
             if (procesoRegistrado) {
                 // El hijo seguía bajo supervisión cuando falló la lectura o
                 // la espera: se termina, se recoge y se retira del registro
@@ -842,6 +1001,11 @@ void trabajador() {
             sleep_for(milliseconds(200));
 
         } catch (...) {
+            if (pipeStderr >= 0) {
+                close(pipeStderr);
+                pipeStderr = -1;
+            }
+
             if (procesoRegistrado) {
                 kill(pid, SIGKILL);
 
@@ -872,7 +1036,7 @@ void trabajador() {
 
 } // namespace anónimo
 
-void ejecutarScheduler() {
+void ejecutarScheduler(int trabajosMaximos) {
     instalarHandlersDeApagado();
 
     // El coordinador observa el flag y, cuando llega SIGTERM/SIGINT, señaliza
@@ -880,9 +1044,9 @@ void ejecutarScheduler() {
     std::thread coordinador(coordinarApagado);
 
     vector<thread> trabajadores;
-    trabajadores.reserve(NUM_TRABAJADORES);
+    trabajadores.reserve(trabajosMaximos);
 
-    for (int i = 0; i < NUM_TRABAJADORES; ++i) {
+    for (int i = 0; i < trabajosMaximos; ++i) {
         trabajadores.emplace_back(trabajador);
     }
 
@@ -893,7 +1057,7 @@ void ejecutarScheduler() {
     coordinador.join();
 }
 
-void iniciarSchedulerSiNecesario() {
+void iniciarSchedulerSiNecesario(int trabajosMaximos) {
     const string rutaLock =
         hermes::rutaDatos("scheduler.lock");
 
@@ -930,6 +1094,9 @@ void iniciarSchedulerSiNecesario() {
         // Paso 3 del flujo de arranque (2.3): ningún temporal de una
         // ejecución muerta participa en la lectura ni se acumula.
         limpiarTemporalesDeJobs();
+        // RNF-28: auto-restauración proactiva de jobs.json desde jobs.json.bak
+        // si está corrupto/truncado al arranque
+        verificarYRestaurarJobsAlArranque();
         hermes::recuperarTrabajosInterrumpidos();
     } catch (const exception& e) {
         hermes::EventLog::log_event_system(hermes::EventLevel::ERROR, "Error interno del daemon", {
@@ -988,7 +1155,7 @@ void iniciarSchedulerSiNecesario() {
     // Se abrió con O_CLOEXEC, así que los Jobs hijos no lo heredan y un
     // huérfano no puede retener el lock tras la muerte del demonio (F1).
 
-    ejecutarScheduler();
+    ejecutarScheduler(trabajosMaximos);
 
     _exit(0);
 }

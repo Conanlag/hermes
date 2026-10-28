@@ -12,6 +12,7 @@
 #include "scheduler.h"
 #include "clean.h"
 #include "event_log.h"
+#include "config.h"
 
 #include <thread>
 #include <chrono>
@@ -56,7 +57,8 @@ int main(int argc, char* argv[]) {
 
 
     try {
-    iniciarSchedulerSiNecesario();
+        const auto config = hermes::cargarConfiguracion();
+        iniciarSchedulerSiNecesario(config.trabajosMaximos);
     } catch (const exception& e) {
         error("No se pudo iniciar el scheduler: ", e.what());
         return 1;

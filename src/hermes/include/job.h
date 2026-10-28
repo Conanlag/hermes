@@ -28,6 +28,7 @@ struct Job {
     int codigoSalida;
     std::string mensajeError;
     bool solicitudDuplicada = false;
+    std::string request_id; // RNF-22: correlación solicitud-trabajo-logs
 };
 
 
@@ -38,17 +39,6 @@ Job crearJob(
 );
 
 
-bool actualizarEstadoJob(
-    unsigned int jobId,
-    Status nuevoEstado
-);
-
-
-bool actualizarResultadoJob(
-    unsigned int jobId,
-    Status nuevoEstado,
-    int codigoSalida
-);
 
 
 bool marcarCancelacionSolicitada(

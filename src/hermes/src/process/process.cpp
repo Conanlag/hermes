@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "process.h"
 
 #include <unistd.h>
@@ -453,36 +454,91 @@ bool escalarCancelacionProceso(pid_t pid, int tiempoGraciaSegundos) {
     return true;
 }
 
-bool esperarProceso(pid_t pid, int& codigoSalida) {
+string obtenerNombreSenal(int senal) {
+    switch (senal) {
+        case SIGHUP: return "SIGHUP";
+        case SIGINT: return "SIGINT";
+        case SIGQUIT: return "SIGQUIT";
+        case SIGILL: return "SIGILL";
+        case SIGTRAP: return "SIGTRAP";
+        case SIGABRT: return "SIGABRT";
+        case SIGBUS: return "SIGBUS";
+        case SIGFPE: return "SIGFPE";
+        case SIGKILL: return "SIGKILL";
+        case SIGUSR1: return "SIGUSR1";
+        case SIGSEGV: return "SIGSEGV";
+        case SIGUSR2: return "SIGUSR2";
+        case SIGPIPE: return "SIGPIPE";
+        case SIGALRM: return "SIGALRM";
+        case SIGTERM: return "SIGTERM";
+        case SIGCHLD: return "SIGCHLD";
+        case SIGCONT: return "SIGCONT";
+        case SIGSTOP: return "SIGSTOP";
+        case SIGTSTP: return "SIGTSTP";
+        case SIGTTIN: return "SIGTTIN";
+        case SIGTTOU: return "SIGTTOU";
+        case SIGURG: return "SIGURG";
+        case SIGXCPU: return "SIGXCPU";
+        case SIGXFSZ: return "SIGXFSZ";
+        case SIGVTALRM: return "SIGVTALRM";
+        case SIGPROF: return "SIGPROF";
+        case SIGWINCH: return "SIGWINCH";
+        case SIGIO: return "SIGIO";
+        case SIGSYS: return "SIGSYS";
+        default: return "SIG_" + std::to_string(senal);
+    }
+}
+
+bool esperarProceso(pid_t pid, ResultadoProceso& resultado) {
+    resultado = ResultadoProceso{};
     int estado = 0;
 
     while (true) {
-        pid_t resultado = waitpid(pid, &estado, 0);
+        pid_t res = waitpid(pid, &estado, 0);
 
-        if (resultado == -1) {
+        if (res == -1) {
             if (errno == EINTR) {
                 continue;
             }
 
-            codigoSalida = -1;
+            resultado.completado = false;
+            resultado.codigoSalida = -1;
             return false;
         }
 
         break;
     }
 
+    resultado.completado = true;
+
     if (WIFEXITED(estado)) {
-        codigoSalida = WEXITSTATUS(estado);
+        resultado.salidoNormalmente = true;
+        resultado.codigoSalida = WEXITSTATUS(estado);
         return true;
     }
 
     if (WIFSIGNALED(estado)) {
-        codigoSalida = -WTERMSIG(estado);
+        resultado.terminadoPorSenal = true;
+        resultado.numeroSenal = WTERMSIG(estado);
+        resultado.codigoSalida = -resultado.numeroSenal;
+        resultado.nombreSenal = obtenerNombreSenal(resultado.numeroSenal);
+        const char* desc = strsignal(resultado.numeroSenal);
+        resultado.descripcionSenal = (desc != nullptr && desc[0] != '\0') ? desc : "señal desconocida";
+#ifdef WCOREDUMP
+        resultado.coreDump = WCOREDUMP(estado);
+#endif
         return true;
     }
 
-    codigoSalida = -1;
+    resultado.codigoSalida = -1;
     return false;
+}
+
+bool esperarProceso(pid_t pid, int& codigoSalida) {
+    ResultadoProceso res;
+    bool exito = esperarProceso(pid, res);
+    codigoSalida = res.codigoSalida;
+    return exito;
 }
 
 bool terminarProceso(pid_t pid) {

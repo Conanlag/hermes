@@ -20,4 +20,11 @@ bool modificarJobsSeguros(const std::function<bool(json&)>& funcion);
  */
 void limpiarTemporalesDeJobs();
 
+/**
+ * Verifica la integridad de jobs.json al arranque. Si está corrupto o truncado
+ * y existe jobs.json.bak válido, lo restaura automáticamente sin interrumpir
+ * el arranque. Emite un evento WARN en events.jsonl si se realiza la restauración.
+ */
+void verificarYRestaurarJobsAlArranque();
+
 #endif
