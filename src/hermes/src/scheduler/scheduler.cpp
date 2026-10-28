@@ -1094,6 +1094,9 @@ void iniciarSchedulerSiNecesario(int trabajosMaximos) {
         // Paso 3 del flujo de arranque (2.3): ningún temporal de una
         // ejecución muerta participa en la lectura ni se acumula.
         limpiarTemporalesDeJobs();
+        // RNF-28: auto-restauración proactiva de jobs.json desde jobs.json.bak
+        // si está corrupto/truncado al arranque
+        verificarYRestaurarJobsAlArranque();
         hermes::recuperarTrabajosInterrumpidos();
     } catch (const exception& e) {
         hermes::EventLog::log_event_system(hermes::EventLevel::ERROR, "Error interno del daemon", {

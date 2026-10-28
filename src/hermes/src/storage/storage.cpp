@@ -398,3 +398,85 @@ void limpiarTemporalesDeJobs() {
         // el arranque por él.
     }
 }
+
+void verificarYRestaurarJobsAlArranque() {
+    namespace fs = std::filesystem;
+
+    try {
+        lock_guard<std::mutex> guardia(mutexStorage);
+        BloqueoArchivo bloqueo;
+
+        const string ruta = hermes::rutaDatos(NOMBRE_JOBS);
+        const string respaldo = hermes::rutaDatos(NOMBRE_RESPALDO);
+
+        // Si jobs.json es válido, no hacer nada
+        if (archivoValido(ruta)) {
+            return;
+        }
+
+        // Intentar restaurar desde jobs.json.bak
+        if (!archivoValido(respaldo)) {
+            // Ni jobs.json ni jobs.json.bak son válidos. No abortar el arranque.
+            hermes::EventLog::log_event_system(
+                hermes::EventLevel::WARN,
+                "jobs.json corrupto o inexistente y jobs.json.bak no válido; se continuará con un estado sin recuperar",
+                {
+                    {"archivo", NOMBRE_JOBS},
+                    {"respaldo", NOMBRE_RESPALDO}
+                }
+            );
+            return;
+        }
+
+        std::error_code ec;
+        fs::copy_file(respaldo, ruta, fs::copy_options::overwrite_existing, ec);
+
+        if (ec) {
+            hermes::EventLog::log_event_system(
+                hermes::EventLevel::ERROR,
+                "No se pudo restaurar jobs.json desde jobs.json.bak",
+                {
+                    {"archivo", NOMBRE_JOBS},
+                    {"respaldo", NOMBRE_RESPALDO},
+                    {"detalle", ec.message()}
+                }
+            );
+            return;
+        }
+
+        if (archivoValido(ruta)) {
+            hermes::EventLog::log_event_system(
+                hermes::EventLevel::WARN,
+                "jobs.json corrupto o truncado. Restaurado automáticamente desde jobs.json.bak",
+                {
+                    {"archivo", NOMBRE_JOBS},
+                    {"respaldo", NOMBRE_RESPALDO}
+                }
+            );
+            return;
+        }
+
+        hermes::EventLog::log_event_system(
+            hermes::EventLevel::ERROR,
+            "Restauración desde jobs.json.bak completada pero jobs.json sigue inválido tras copia",
+            {
+                {"archivo", NOMBRE_JOBS},
+                {"respaldo", NOMBRE_RESPALDO}
+            }
+        );
+    } catch (const std::exception& e) {
+        try {
+            hermes::EventLog::log_event_system(
+                hermes::EventLevel::ERROR,
+                "Error durante la verificación/restauración de jobs.json al arranque",
+                {
+                    {"detalle", e.what()}
+                }
+            );
+        } catch (...) {
+            // No interrumpir el arranque
+        }
+    } catch (...) {
+        // No interrumpir el arranque
+    }
+}
