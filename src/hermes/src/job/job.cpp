@@ -69,6 +69,7 @@ Job crearJob(
     nuevo.tiempo_inicio = "";
     nuevo.tiempo_terminacion = "";
     nuevo.codigoSalida = -1;
+    nuevo.request_id = requestId;
 
     bool solicitudExistente = false;
     bool guardado = modificarJobsSeguros([&](json& jobs) {
@@ -108,6 +109,11 @@ Job crearJob(
                 nuevo.codigoSalida = item.value("codigo_salida", -1);
                 nuevo.mensajeError = item.value("mensaje_error", string{});
                 nuevo.solicitudDuplicada = true;
+                if (item.contains("request_id") && item["request_id"].is_string()) {
+                    nuevo.request_id = item["request_id"].get<string>();
+                } else {
+                    nuevo.request_id.clear();
+                }
                 solicitudExistente = true;
             }
         }
@@ -142,10 +148,13 @@ Job crearJob(
     }
 
     if (!solicitudExistente) {
-        hermes::EventLog::log_event(nuevo.job_id, hermes::EventLevel::INFO, "Job recibido", {
-            {"programa", nuevo.programa},
-            {"argumentos", nuevo.argumentos}
-        });
+        nlohmann::json ctxRecibido;
+        ctxRecibido["programa"] = nuevo.programa;
+        ctxRecibido["argumentos"] = nuevo.argumentos;
+        if (!nuevo.request_id.empty()) {
+            ctxRecibido["request_id"] = nuevo.request_id;
+        }
+        hermes::EventLog::log_event(nuevo.job_id, hermes::EventLevel::INFO, "Job recibido", ctxRecibido);
     } else {
         hermes::EventLog::log_event(nuevo.job_id, hermes::EventLevel::DEBUG, "Solicitud duplicada reutilizada", nlohmann::json::object());
     }
@@ -190,6 +199,11 @@ bool obtenerJobPorId(unsigned int jobId, Job& jobOut) {
                 item.value("tiempo_inicio", string{});
             jobOut.tiempo_terminacion =
                 item.value("tiempo_terminacion", string{});
+            if (item.contains("request_id") && item["request_id"].is_string()) {
+                jobOut.request_id = item["request_id"].get<string>();
+            } else {
+                jobOut.request_id.clear();
+            }
 
             jobOut.argumentos.clear();
 

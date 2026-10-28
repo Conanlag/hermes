@@ -28,6 +28,7 @@ struct Job {
     int codigoSalida;
     std::string mensajeError;
     bool solicitudDuplicada = false;
+    std::string request_id; // RNF-22: correlación solicitud-trabajo-logs
 };
 
 

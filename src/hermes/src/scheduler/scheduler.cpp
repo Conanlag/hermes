@@ -39,12 +39,14 @@ struct TrabajoPendiente {
     unsigned int id = 0;
     string programa;
     vector<string> argumentos;
+    string request_id;
 };
 
 bool reservarTrabajo(TrabajoPendiente& trabajo) {
     unsigned int idReservado = 0;
     string programaReservado;
     vector<string> argumentosReservados;
+    string requestIdReservado;
 
     const bool reservado = modificarJobsSeguros([&](json& jobs) {
         for (auto& item : jobs) {
@@ -74,6 +76,12 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
                 }
             }
 
+            if (item.contains("request_id") && item["request_id"].is_string()) {
+                requestIdReservado = item["request_id"].get<string>();
+            } else {
+                requestIdReservado.clear();
+            }
+
             item["status"] = "RUNNING";
             item["pid"] = 0;
             item["tiempo_inicio"] = obtenerFechaHoraActual();
@@ -95,6 +103,7 @@ bool reservarTrabajo(TrabajoPendiente& trabajo) {
     trabajo.id = idReservado;
     trabajo.programa = std::move(programaReservado);
     trabajo.argumentos = std::move(argumentosReservados);
+    trabajo.request_id = std::move(requestIdReservado);
 
     return true;
 }
@@ -173,9 +182,26 @@ bool guardarPid(
         return false;
     }
 
-    hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a RUNNING", {
-        {"pid", static_cast<int>(pid)}
-    });
+    {
+        nlohmann::json ctxRunning;
+        ctxRunning["pid"] = static_cast<int>(pid);
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxRunning["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+            // No bloquear el flujo si no se puede leer request_id
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a RUNNING", ctxRunning);
+    }
 
     if (!hayIdentidad) {
         hermes::EventLog::log_event(id, hermes::EventLevel::WARN, "Identidad de proceso no verificable", {
@@ -255,14 +281,42 @@ void finalizarTrabajo(
     });
 
     if (fueCancelado) {
-        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", {
-            {"estado_previo", "RUNNING"},
-            {"exit_code", resultado.codigoSalida}
-        });
+        nlohmann::json ctxCanc;
+        ctxCanc["estado_previo"] = "RUNNING";
+        ctxCanc["exit_code"] = resultado.codigoSalida;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxCanc["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", ctxCanc);
     } else if (fueExitoso) {
-        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a SUCCEEDED", {
-            {"exit_code", resultado.codigoSalida}
-        });
+        nlohmann::json ctxOk;
+        ctxOk["exit_code"] = resultado.codigoSalida;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxOk["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Transición a SUCCEEDED", ctxOk);
     } else if (fueFallido) {
         nlohmann::json ctx;
         ctx["exit_code"] = resultado.codigoSalida;
@@ -277,6 +331,20 @@ void finalizarTrabajo(
         }
         if (!mensajeDiagnostico.empty()) {
             ctx["detalle"] = mensajeDiagnostico;
+        }
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctx["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
         }
         hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Transición a FAILED", ctx);
     }
@@ -358,16 +426,44 @@ void registrarFallo(
     }
 
     if (fueCancelado) {
-        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", {
-            {"estado_previo", "RUNNING"},
-            {"exit_code", codigoSalida},
-            {"detalle", mensaje}
-        });
+        nlohmann::json ctxCanc2;
+        ctxCanc2["estado_previo"] = "RUNNING";
+        ctxCanc2["exit_code"] = codigoSalida;
+        ctxCanc2["detalle"] = mensaje;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctxCanc2["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
+        hermes::EventLog::log_event(id, hermes::EventLevel::INFO, "Cancelación exitosa", ctxCanc2);
     } else {
         nlohmann::json ctx;
         ctx["exit_code"] = codigoSalida;
         ctx["detalle"] = mensaje;
         ctx["errno"] = errno;
+        try {
+            json jobs = leerJobsSeguros();
+            for (const auto& item : jobs) {
+                if (item.contains("job_id") && item["job_id"] == id &&
+                    item.contains("request_id") && item["request_id"].is_string()) {
+                    const string rid = item["request_id"].get<string>();
+                    if (!rid.empty()) {
+                        ctx["request_id"] = rid;
+                    }
+                    break;
+                }
+            }
+        } catch (...) {
+        }
         hermes::EventLog::log_event(id, hermes::EventLevel::ERROR, "Error interno del daemon", ctx);
     }
 }
