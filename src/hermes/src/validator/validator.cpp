@@ -1,7 +1,9 @@
 
 #include "validator.h"
+#include "config.h"
 #include "event_log.h"
 
+#include <charconv>
 #include <stdexcept>
 
 using namespace std;
@@ -21,7 +23,7 @@ ResultadoValidacion validarComando(const string& comando) {
             false,
             CodigoValidacion::VACIO,
             "Comando vacio. Comandos validos: "
-            "job, filter, cancel, clean, --version, --help"
+                "job, filter, cancel, clean, configmax, --version, --help"
         };
     }
 
@@ -30,6 +32,7 @@ ResultadoValidacion validarComando(const string& comando) {
         comando == "filter" ||
         comando == "cancel" ||
         comando == "clean" ||
+        comando == "configmax" ||
         comando == "--version" ||
         comando == "--help"
     ) {
@@ -52,7 +55,7 @@ ResultadoValidacion validarComando(const string& comando) {
         "Comando no reconocido: " +
         comando +
         ". Comandos validos: "
-        "job, filter, cancel, clean, --version, --help"
+        "job, filter, cancel, clean, configmax, --version, --help"
     };
 }
 
@@ -373,5 +376,78 @@ ResultadoValidacion validarStatusTexto(
         status +
         ". Estados validos: "
         "QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED"
+    };
+}
+
+ResultadoValidacion validarTrabajosMaximosTexto(
+    const string& texto
+) {
+    if (texto.empty()) {
+        hermes::EventLog::log_event_system(
+            hermes::EventLevel::WARN,
+            "Rechazo de Validación",
+            {
+                {"comando_intentado", "configmax"},
+                {"valor_intentado", texto},
+                {"motivo_del_rechazo", "Valor vacío"}
+            }
+        );
+        return {
+            false,
+            CodigoValidacion::VACIO,
+            "Uso: hermes configmax <N> (N debe estar entre " +
+                to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
+                to_string(hermes::MAX_TRABAJOS_MAXIMOS) + ")."
+        };
+    }
+
+    int valor = 0;
+    const char* inicio = texto.data();
+    const char* fin = inicio + texto.size();
+    const auto resultado = std::from_chars(inicio, fin, valor);
+
+    if (resultado.ec != std::errc{} || resultado.ptr != fin) {
+        hermes::EventLog::log_event_system(
+            hermes::EventLevel::WARN,
+            "Rechazo de Validación",
+            {
+                {"comando_intentado", "configmax"},
+                {"valor_intentado", texto},
+                {"motivo_del_rechazo", "Valor no es un entero válido"}
+            }
+        );
+        return {
+            false,
+            CodigoValidacion::MALFORMADO,
+            "El valor debe ser un número entero entre " +
+                to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
+                to_string(hermes::MAX_TRABAJOS_MAXIMOS) + "."
+        };
+    }
+
+    if (valor < hermes::MIN_TRABAJOS_MAXIMOS ||
+        valor > hermes::MAX_TRABAJOS_MAXIMOS) {
+        hermes::EventLog::log_event_system(
+            hermes::EventLevel::WARN,
+            "Rechazo de Validación",
+            {
+                {"comando_intentado", "configmax"},
+                {"valor_intentado", texto},
+                {"motivo_del_rechazo", "Valor fuera del rango permitido"}
+            }
+        );
+        return {
+            false,
+            CodigoValidacion::MALFORMADO,
+            "El valor debe estar entre " +
+                to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
+                to_string(hermes::MAX_TRABAJOS_MAXIMOS) + "."
+        };
+    }
+
+    return {
+        true,
+        CodigoValidacion::OK,
+        ""
     };
 }

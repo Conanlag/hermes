@@ -62,6 +62,39 @@ int main(int argc, char* argv[]) {
         return detenerSchedulerOrdenadamente();
     }
 
+    if (comando == "configmax") {
+        if (argc != 3) {
+            error("Uso: hermes configmax <N> (N debe estar entre 1 y 64).");
+            return 1;
+        }
+
+        const ResultadoValidacion validacion =
+            validarTrabajosMaximosTexto(argv[2]);
+        if (!validacion.esValido) {
+            error(validacion.mensaje);
+            return 1;
+        }
+
+        const int trabajosMaximos = std::stoi(argv[2]);
+        try {
+            hermes::establecerTrabajosMaximos(trabajosMaximos);
+        } catch (const exception& e) {
+            error("No se pudo actualizar la configuración: ", e.what());
+            return 1;
+        }
+
+        info(
+            "Máximo de trabajos simultáneos configurado en ",
+            trabajosMaximos,
+            ". El cambio de workers se aplica al iniciar el scheduler."
+        );
+        warning(
+            "Para aplicarlo ahora, ejecute 'hermes clean scheduler'; "
+            "los trabajos en ejecución serán interrumpidos."
+        );
+        return 0;
+    }
+
     hermes::ConfiguracionSistema config;
     try {
         config = hermes::cargarConfiguracion();

@@ -100,7 +100,8 @@ En el repositorio, `src/hermes/data` es un enlace simbólico a ese directorio. A
 | Archivo | Contenido o función |
 | ------- | ------------------- |
 | `jobs.json` | Arreglo JSON con el historial y los metadatos de cada Job: ID, programa, argumentos, estado, PID, tiempos y resultado. |
-| `config.json` | Configura `trabajos_maximos`, el máximo de workers simultáneos y el máximo de Jobs activos admitidos (`QUEUED` + `RUNNING`), de 1 a 64. Si falta o no es válido, se usa `5`. El límite de admisión se lee en cada invocación; la cantidad de workers, al iniciar el scheduler. |
+| `config.json` | Configura `trabajos_maximos`, el máximo de workers simultáneos y el máximo de Jobs activos admitidos (`QUEUED` + `RUNNING`), de 1 a 64. Si falta o no es válido, se usa `5`. Se actualiza con `hermes configmax <N>`; el límite de admisión se lee en cada invocación y la cantidad de workers al iniciar el scheduler. |
+| `config.lock` | Bloqueo interno que serializa cambios concurrentes de `config.json`. |
 | `jobs.lock` | Archivo de bloqueo que `flock` usa para serializar modificaciones concurrentes del almacenamiento. |
 | `scheduler.lock` | Bloqueo exclusivo que conserva abierto el scheduler en segundo plano para evitar iniciar otro scheduler al mismo tiempo; también contiene el PID del daemon para `hermes clean scheduler`. |
 

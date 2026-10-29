@@ -18,6 +18,14 @@ struct ConfiguracionSistema {
  */
 ConfiguracionSistema cargarConfiguracion();
 
+/**
+ * Actualiza y persiste el máximo de trabajos configurado.
+ *
+ * @throws std::invalid_argument si el valor está fuera del rango permitido.
+ * @throws std::runtime_error si la configuración no se puede leer o guardar.
+ */
+void establecerTrabajosMaximos(int trabajosMaximos);
+
 } // namespace hermes
 
 #endif

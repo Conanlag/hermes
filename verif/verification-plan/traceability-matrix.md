@@ -1,4 +1,4 @@
-﻿# Matriz de Trazabilidad y VerificaciÃ³n
+# Matriz de Trazabilidad y VerificaciÃ³n
 **Estado:** Avance 1
 
 | Req ID   | Descripcionn breve   | Prioridad   | Metodo   | Caso(s)   | Evidencia   | Resultado   | Defecto/Excepcion   |
@@ -7,7 +7,7 @@
 | RF-02    | Validacion de solicitudes con mensaje util | Alta        | Prueba  | TC-001    | verif/scripts/TC-001.sh + verif/results/tc001.log ([PASS]) | PASS        | -                   |
 | RF-03    | Cola inicial cuando no hay capacidad inmediata | Alta        | Prueba  | TC-002    | verif/scripts/TC-002.sh + verif/results/tc002.log ([PASS]) | PASS | -                   |
 | RF-04    |                     |             |          |           |             | Pendiente   |                     |
-| RF-05    |                     |             |          |           |             | Pendiente   |                     |
+| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-024 | verif/scripts/TC-024.sh ([PASS]) | PASS | - |
 | RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED | CrÃ­tica     | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([PASS]) | PASS        | -                   |
 | RF-07    | Tiempos de recepciÃ³n, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
 | RF-08    | Consulta de un trabajo mediante ID | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
