@@ -35,7 +35,8 @@ struct Job {
 Job crearJob(
     const string& programa,
     const vector<string>& argumentos,
-    const string& requestId = ""
+    const string& requestId = "",
+    int trabajosMaximos = 5
 );
 
 

@@ -62,8 +62,9 @@ int main(int argc, char* argv[]) {
         return detenerSchedulerOrdenadamente();
     }
 
+    hermes::ConfiguracionSistema config;
     try {
-        const auto config = hermes::cargarConfiguracion();
+        config = hermes::cargarConfiguracion();
         iniciarSchedulerSiNecesario(config.trabajosMaximos);
     } catch (const exception& e) {
         error("No se pudo iniciar el scheduler: ", e.what());
@@ -117,7 +118,12 @@ int main(int argc, char* argv[]) {
 
         Job job;
         try {
-            job = crearJob(programa, argumentos, requestId);
+            job = crearJob(
+                programa,
+                argumentos,
+                requestId,
+                config.trabajosMaximos
+            );
         } catch (const exception& e) {
             error("No se pudo crear el Job: ", e.what());
             return 1;
