@@ -14,7 +14,7 @@ La bitácora se almacena en formato **JSON Lines (JSONL)**: cada línea represen
 
 **Consideraciones actuales:**
 
-- **Lo que hace:** Registra `Job recibido`, `Transición a RUNNING` (con PID del proceso hijo), `Transición a SUCCEEDED`/`Transición a FAILED` (con `exit_code`/`signal_number` cuando aplica), `Cancelación solicitada` (desde CLI), `Cancelación exitosa` (ejecutada por el daemon), `Petición inválida` (cancelación sobre trabajos ya finalizados) y `Rechazo de Validación` (comandos/parámetros inválidos). También registra `Error interno del daemon` con `errno`/detalle en fallos críticos.
+- **Lo que hace:** Registra `Job recibido`, `Transición a RUNNING` (con PID del proceso hijo), `Transición a SUCCEEDED`/`Transición a FAILED` (con `exit_code`/`signal_number` cuando aplica), `Cancelación solicitada` (desde CLI), `Cancelación exitosa` (ejecutada por el daemon), `Petición inválida` (cancelación sobre trabajos ya finalizados), `Rechazo de Validación` (comandos/parámetros inválidos) y `Solicitud rechazada: cola llena` (capacidad de trabajos activos excedida, RF-23/RF-25). También registra `Error interno del daemon` con `errno`/detalle en fallos críticos.
 - **Lo que NO hace:** No genera una bitácora global de todo el sistema ajena al ciclo de vida de trabajos. No reemplaza `stderr` ni los mensajes del CLI. No implementa rotación/compresión, búsqueda, filtrado ni purga del archivo. No registra todos los errores menores del código base (solo los puntos críticos acordados). No persiste históricos complejos fuera del formato JSONL *append-only*.
 
 ---

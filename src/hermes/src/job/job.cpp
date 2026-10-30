@@ -171,21 +171,25 @@ Job crearJob(
     if (colaLlena) {
         nlohmann::json contexto;
         contexto["programa"] = programa;
+        contexto["motivo_del_rechazo"] = "capacidad_de_trabajos_alcanzada";
         contexto["trabajos_activos"] = trabajosActivos;
         contexto["capacidad"] = trabajosMaximos;
         if (!requestId.empty()) {
             contexto["request_id"] = requestId;
         }
-        hermes::EventLog::log_event_system(
+        const bool rechazoRegistrado = hermes::EventLog::log_event_system(
             hermes::EventLevel::WARN,
             "Solicitud rechazada: cola llena",
             contexto
         );
-        throw runtime_error(
+        string mensajeRechazo =
             "La cola está llena (" + to_string(trabajosActivos) +
             "/" + to_string(trabajosMaximos) +
-            " trabajos activos). Intente de nuevo cuando haya espacio."
-        );
+            " trabajos activos). Intente de nuevo cuando haya espacio.";
+        if (!rechazoRegistrado) {
+            mensajeRechazo += " No se pudo registrar el rechazo en la bitácora.";
+        }
+        throw runtime_error(mensajeRechazo);
     }
 
     if (!guardado && !solicitudExistente) {

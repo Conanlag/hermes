@@ -25,7 +25,7 @@
 | RF-20    |                     |             |          |           |             | Pendiente   |                     |
 | RF-21    |                     |             |          |           |             | Pendiente   |                     |
 | RF-22    |                     |             |          |           |             | Pendiente   |                     |
-| RF-23    |                     |             |          |           |             | Pendiente   |                     |
+| RF-23    | Rechazo y registro de solicitudes que exceden límites configurados | Alta | Prueba | TC-023 | verif/scripts/TC-023.sh ([PASS]); eventos WARN en events.jsonl | PASS | - |
 | RF-24    |                     |             |          |           |             | Pendiente   |                     |
 | RF-25    | Rechazo explícito al alcanzar capacidad configurada de cola | Alta | Prueba | TC-023 | verif/scripts/TC-023.sh | Pendiente | - |
 | RF-26    | Cancelaciones concurrentes coherentes | Alta | Prueba | TC-019 | verif/scripts/TC-019.sh; 10/10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |

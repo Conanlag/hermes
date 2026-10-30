@@ -5,6 +5,7 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HERMES="$REPO/src/hermes/hermes"
 TEST_HOME="$(mktemp -d)"
 DATA="$TEST_HOME/.local/share/hermes/data/jobs.json"
+EVENTS="$TEST_HOME/.local/share/hermes/data/events.jsonl"
 OUTPUT_DIR="$TEST_HOME/output"
 mkdir -p "$OUTPUT_DIR" "$TEST_HOME/.local/share/hermes/data"
 
@@ -116,6 +117,33 @@ if [[ "$TOTAL" -ne 2 || "$ACTIVE" -ne 2 ]]; then
     exit 1
 fi
 
+perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my $path = shift;
+    open my $file, "<", $path or die "No se pudo abrir $path: $!\n";
+    my @events = map { decode_json($_) } <$file>;
+    my @rejections = grep {
+        ($_->{message} // "") eq "Solicitud rechazada: cola llena"
+    } @events;
+    @rejections == 7
+        or die "Se esperaban 7 eventos de rechazo; se encontraron " . scalar(@rejections) . "\n";
+    for my $event (@rejections) {
+        ($event->{level} // "") eq "WARN"
+            or die "El rechazo debe registrarse con nivel WARN\n";
+        !defined($event->{job_id})
+            or die "El rechazo previo a la creación debe tener job_id null\n";
+        my $context = $event->{context};
+        ref($context) eq "HASH"
+            or die "El evento de rechazo debe incluir contexto\n";
+        ($context->{motivo_del_rechazo} // "") eq "capacidad_de_trabajos_alcanzada"
+            or die "El evento no identifica el límite excedido\n";
+        ($context->{trabajos_activos} // 0) == 2 &&
+            ($context->{capacidad} // 0) == 2
+            or die "El evento no registra trabajos activos y capacidad\n";
+    }
+' "$EVENTS"
+
 RETRY_OUTPUT="$("$HERMES" job --request-id rf25-seed sleep 30 2>&1)"
 RETRY_ID="$(printf '%s\n' "$RETRY_OUTPUT" | sed -n 's/^job ID: *//p' | head -n 1)"
 read -r TOTAL ACTIVE <<<"$(read_counts)"
@@ -145,4 +173,4 @@ if [[ -z "$RELEASED_ID" ]]; then
     exit 1
 fi
 
-echo "PASS: el límite concurrente rechazó sin persistir Jobs extra; el request-id se reutilizó y la capacidad se liberó."
+echo "PASS: el límite concurrente rechazó sin persistir Jobs extra, registró los rechazos y liberó la capacidad."
