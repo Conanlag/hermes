@@ -2,7 +2,7 @@
 
 ## Contexto
 
-El proyecto requiere desarrollar una aplicación capaz de crear, ejecutar, administrar y monitorear procesos en un sistema Linux. Por lo tanto, se necesita un lenguaje que permita interactuar con las APIs del sistema operativo y con mecanismos de procesos y comunicación entre procesos.
+El proyecto requiere desarrollar una aplicación capaz de crear, ejecutar, administrar y monitorear procesos en un sistema Linux. Por lo tanto, se necesita un lenguaje que permita interactuar con las APIs del sistema operativo y con mecanismos de procesos y comunicación entre procesos. 
 
 ## Decisión
 

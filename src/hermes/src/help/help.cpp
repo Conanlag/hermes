@@ -20,6 +20,7 @@ int mostrarAyuda() {
     cout << "  cancel <id>                    Cancela un trabajo en cola o en ejecucion" << endl;
     cout << "  clean data                     Limpia el historial de trabajos finalizados" << endl;
     cout << "  clean scheduler                Detiene el scheduler ordenadamente" << endl;
+    cout << "  configmax <N>                  Configura el máximo de trabajos simultáneos (1-64)" << endl;
     cout << "  --version                      Muestra la version" << endl;
     cout << "  --help                         Muestra esta ayuda" << endl;
     cout << endl;
@@ -35,6 +36,7 @@ int mostrarAyuda() {
     cout << "  hermes cancel 1" << endl;
     cout << "  hermes clean data" << endl;
     cout << "  hermes clean scheduler" << endl;
+    cout << "  hermes configmax 3" << endl;
     cout << endl;
 
     cout << "Codigos de salida: 0 exito, 1 error" << endl;

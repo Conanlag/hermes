@@ -32,4 +32,6 @@ ResultadoValidacion validarIdTexto(const string& textoId);
 
 ResultadoValidacion validarStatusTexto(const string& status);
 
+ResultadoValidacion validarTrabajosMaximosTexto(const string& texto);
+
 #endif

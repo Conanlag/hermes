@@ -58,8 +58,15 @@ bool actualizarCampo(
 Job crearJob(
     const string& programa,
     const vector<string>& argumentos,
-    const string& requestId
+    const string& requestId,
+    int trabajosMaximos
 ) {
+    if (trabajosMaximos < 1) {
+        throw invalid_argument(
+            "La capacidad máxima debe ser mayor que cero"
+        );
+    }
+
     Job nuevo{};
     nuevo.pid = 0;
     nuevo.programa = programa;
@@ -72,6 +79,8 @@ Job crearJob(
     nuevo.request_id = requestId;
 
     bool solicitudExistente = false;
+    bool colaLlena = false;
+    size_t trabajosActivos = 0;
     bool guardado = modificarJobsSeguros([&](json& jobs) {
         if (!requestId.empty()) {
             for (const auto& item : jobs) {
@@ -122,6 +131,22 @@ Job crearJob(
             return false;
         }
 
+        for (const auto& item : jobs) {
+            if (!item.contains("status") || !item["status"].is_string()) {
+                continue;
+            }
+
+            const string status = item["status"].get<string>();
+            if (status == "QUEUED" || status == "RUNNING") {
+                ++trabajosActivos;
+            }
+        }
+
+        if (trabajosActivos >= static_cast<size_t>(trabajosMaximos)) {
+            colaLlena = true;
+            return false;
+        }
+
         nuevo.job_id = siguienteId(jobs);
 
         json item;
@@ -142,6 +167,30 @@ Job crearJob(
         jobs.push_back(item);
         return true;
     });
+
+    if (colaLlena) {
+        nlohmann::json contexto;
+        contexto["programa"] = programa;
+        contexto["motivo_del_rechazo"] = "capacidad_de_trabajos_alcanzada";
+        contexto["trabajos_activos"] = trabajosActivos;
+        contexto["capacidad"] = trabajosMaximos;
+        if (!requestId.empty()) {
+            contexto["request_id"] = requestId;
+        }
+        const bool rechazoRegistrado = hermes::EventLog::log_event_system(
+            hermes::EventLevel::WARN,
+            "Solicitud rechazada: cola llena",
+            contexto
+        );
+        string mensajeRechazo =
+            "La cola está llena (" + to_string(trabajosActivos) +
+            "/" + to_string(trabajosMaximos) +
+            " trabajos activos). Intente de nuevo cuando haya espacio.";
+        if (!rechazoRegistrado) {
+            mensajeRechazo += " No se pudo registrar el rechazo en la bitácora.";
+        }
+        throw runtime_error(mensajeRechazo);
+    }
 
     if (!guardado && !solicitudExistente) {
         throw runtime_error("No se pudo registrar el trabajo");
