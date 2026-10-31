@@ -59,5 +59,6 @@
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-024 | verif/scripts/TC-024.sh + verif/results/results_TC-024.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
 | RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Alta | Prueba de concurrencia | TC-019 | verif/scripts/TC-019.sh; 10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
+| RNF-28   | Persistencia atómica o recuperable tras una interrupción durante la escritura | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; caso (f); verif/results/results_TC-022.md (2026-10-30, [PASS]) | PASS | - |
 | RNF-30   | Sin huérfanos: terminación de grupo, PDEATHSIG y cierre ordenado | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; casos (a), (b), (c), (h) | PASS | - |
-| RNF-31   | Clasificación explícita y fail-closed: INTERRUPTED con motivo | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; casos (d), (e), (i); TC-016 | PASS | - |
+| RNF-31   | Clasificación explícita y fail-closed: INTERRUPTED con motivo | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; casos (d), (e), (i) ([PASS], 2026-10-30); TC-016 | PASS | - |
