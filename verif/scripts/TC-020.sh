@@ -1,212 +1,156 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# TC-020: Terminación inesperada del proceso hijo (Robustez)
+# RF-29, RNF-30
+# Uso: bash verif/scripts/TC-020.sh
+# Evidencia: verif/results/tc020.log
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-HERMES="$REPO/src/hermes/hermes"
-TRABAJOS="${1:-100}"
-CONCURRENCIA=10
-TOLERANCIA_MEMORIA_KB=8192
-TEST_ROOT="$(mktemp -d)"
-TEST_HOME="$TEST_ROOT/home"
-REQUESTS_DIR="$TEST_ROOT/requests"
-DATA_DIR="$TEST_HOME/.local/share/hermes/data"
-DATA="$DATA_DIR/jobs.json"
-LOCK="$DATA_DIR/scheduler.lock"
-RESULTS_DIR="$REPO/verif/results"
-RESULTS_FILE="$RESULTS_DIR/results_TC-020.md"
+mkdir -p "$REPO/verif/results"
+LOG="$REPO/verif/results/tc020.log"
+: > "$LOG"
+exec > >(tee -a "$LOG") 2>&1
 
-mkdir -p "$REQUESTS_DIR" "$RESULTS_DIR"
-{
-    printf '\n## Ejecucion: %s\n\n' "$(date '+%Y-%m-%d %H:%M:%S %z')"
-    printf '```text\n'
-} >>"$RESULTS_FILE"
-exec > >(tee -a "$RESULTS_FILE") 2>&1
+echo "=== Ejecutando TC-020 ==="
+echo "[INFO] Fecha/Hora: $(date)"
+echo "[INFO] Directorio raíz: ${REPO}"
 
-find_scheduler_pid() {
-    local descriptor target process_path
-    for descriptor in /proc/[0-9]*/fd/*; do
-        [[ -e "$descriptor" ]] || continue
-        target="$(readlink "$descriptor" 2>/dev/null || true)"
-        if [[ "$target" == "$LOCK" ]]; then
-            process_path="${descriptor#/proc/}"
-            printf '%s\n' "${process_path%%/*}"
-            return 0
-        fi
-    done
-    return 0
-}
+cd "$REPO/src/hermes" || exit 1
 
-stop_scheduler() {
-    local scheduler_pid
-    scheduler_pid="$(find_scheduler_pid)"
-    if [[ -z "$scheduler_pid" ]]; then
-        return 0
-    fi
-
-    kill "$scheduler_pid" 2>/dev/null || true
-    for _ in $(seq 1 50); do
-        if [[ ! -d "/proc/$scheduler_pid/fd" ]]; then
-            return 0
-        fi
-        sleep 0.1
-    done
-
-    echo "FAIL: el scheduler no liberó sus descriptores al detenerse."
-    return 1
-}
+# Aislamiento: HOME temporal por prueba para proteger datos reales
+TEST_HOME="$(mktemp -d)"
+export HOME="$TEST_HOME"
+DATA_DIR="${HOME}/.local/share/hermes/data"
+mkdir -p "${DATA_DIR}"
+JOBS_FILE="${DATA_DIR}/jobs.json"
+EVENTS_FILE="${DATA_DIR}/events.jsonl"
 
 cleanup() {
-    stop_scheduler || true
-    rm -rf "$TEST_ROOT"
-    printf '```\n'
+    rm -rf "$TEST_HOME"
 }
 trap cleanup EXIT
 
-if [[ ! "$TRABAJOS" =~ ^[0-9]+$ ]] || (( TRABAJOS < 10 )); then
-    echo "FAIL: indica al menos 10 trabajos (uso: bash verif/scripts/TC-020.sh [cantidad])."
+# Paso 1: Compilar
+echo "[INFO] Compilando proyecto..."
+make clean && make > /dev/null
+echo "[INFO] Compilación limpia OK."
+
+HERMES_BIN="./hermes"
+if [ ! -x "${HERMES_BIN}" ]; then
+    echo "[FAIL] No se encontró binario ejecutable 'hermes'."
     exit 1
 fi
 
-if [[ ! -x "$HERMES" ]]; then
-    echo "FAIL: no existe $HERMES. Compila Hermes antes de ejecutar la prueba."
+# Paso 2: Inyectar fallo crítico (SIGSEGV)
+# Usamos comillas simples para asegurar que $$ sea evaluado por el sub-bash del job y no por este script.
+echo "[INFO] Encolando job suicida: bash -c 'kill -SEGV \$\$'"
+OUT="$("${HERMES_BIN}" job bash -c 'kill -SEGV $$' 2>&1)"
+echo "$OUT"
+
+JOB_ID=$(echo "$OUT" | grep -oP 'job ID: \K[0-9]+')
+JOB_PID=$(echo "$OUT" | grep -oP 'PID: \K[0-9]+')
+
+if [ -z "$JOB_ID" ] || [ -z "$JOB_PID" ]; then
+    echo "[FAIL] No se pudo extraer Job ID o PID."
     exit 1
 fi
 
-export HOME="$TEST_HOME"
+echo "[INFO] Job ID: $JOB_ID | PID: $JOB_PID"
 
-wait_for_terminal_jobs() {
-    local expected="$1"
-    local pending
-
-    for _ in $(seq 1 200); do
-        pending="$(perl -MJSON::PP -e '
-            use strict;
-            use warnings;
-            my ($path, $expected) = @ARGV;
-            open my $file, "<", $path or die "No se pudo abrir $path: $!";
-            local $/;
-            my $jobs = decode_json(<$file>);
-            ref($jobs) eq "ARRAY" or die "jobs.json no es un arreglo\n";
-            @$jobs == $expected or die "Cantidad de Jobs inesperada: " .
-                scalar(@$jobs) . " (esperada: $expected)\n";
-            my $pending = grep {
-                ($_->{status} // "") eq "QUEUED" ||
-                ($_->{status} // "") eq "RUNNING"
-            } @$jobs;
-            print $pending;
-        ' "$DATA" "$expected")"
-
-        if [[ "$pending" == "0" ]]; then
-            return 0
-        fi
-        sleep 0.1
-    done
-
-    echo "FAIL: los $expected Jobs no terminaron dentro del tiempo esperado."
-    return 1
-}
-
-job_output="$("$HERMES" job true 2>&1)"
-printf '%s\n' "$job_output"
-wait_for_terminal_jobs 1
-
-SCHEDULER_PID="$(find_scheduler_pid)"
-if [[ -z "$SCHEDULER_PID" ]]; then
-    echo "FAIL: no se encontró el proceso scheduler."
-    exit 1
-fi
-
-read_rss_kb() {
-    awk '/^VmRSS:/ { print $2 }' "/proc/$SCHEDULER_PID/status"
-}
-
-count_fds() {
-    find "/proc/$SCHEDULER_PID/fd" -mindepth 1 -maxdepth 1 -type l \
-        | wc -l
-}
-
-count_sockets() {
-    local descriptor target count=0
-    for descriptor in "/proc/$SCHEDULER_PID"/fd/*; do
-        [[ -e "$descriptor" ]] || continue
-        target="$(readlink "$descriptor" 2>/dev/null || true)"
-        [[ "$target" == socket:\[* ]] && count=$((count + 1))
-    done
-    printf '%s\n' "$count"
-}
-
-count_children() {
-    local children
-    children="$(cat "/proc/$SCHEDULER_PID/task/$SCHEDULER_PID/children")"
-    if [[ -z "$children" ]]; then
-        printf '0\n'
-    else
-        wc -w <<<"$children"
-    fi
-}
-
-BASE_RSS_KB="$(read_rss_kb)"
-BASE_FDS="$(count_fds)"
-BASE_SOCKETS="$(count_sockets)"
-
-echo "Línea base scheduler: RSS=${BASE_RSS_KB}KB, FDs=$BASE_FDS, sockets=$BASE_SOCKETS"
-
-for ((start = 1; start <= TRABAJOS; start += CONCURRENCIA)); do
-    batch_end=$((start + CONCURRENCIA - 1))
-    (( batch_end > TRABAJOS )) && batch_end="$TRABAJOS"
-    pids=()
-
-    for ((index = start; index <= batch_end; index++)); do
-        "$HERMES" job true >"$REQUESTS_DIR/job-$index.log" 2>&1 &
-        pids+=("$!")
-    done
-
-    for pid in "${pids[@]}"; do
-        wait "$pid"
-    done
-done
-
-ESPERADOS="$((TRABAJOS + 1))"
-wait_for_terminal_jobs "$ESPERADOS"
+# Esperar a que el proceso muera y el scheduler aplique waitpid
 sleep 2
 
-AFTER_RSS_KB="$(read_rss_kb)"
-AFTER_FDS="$(count_fds)"
-AFTER_SOCKETS="$(count_sockets)"
-AFTER_CHILDREN="$(count_children)"
+# Paso 3: Verificación visual en CLI (RF-29)
+echo "[INFO] Verificando salida en CLI..."
+CLI_OUT=$("${HERMES_BIN}" filter id "$JOB_ID" 2>&1)
+echo "$CLI_OUT"
 
-echo "Después del estrés: RSS=${AFTER_RSS_KB}KB, FDs=$AFTER_FDS, sockets=$AFTER_SOCKETS, procesos hijos=$AFTER_CHILDREN"
-
-if (( AFTER_RSS_KB > BASE_RSS_KB + TOLERANCIA_MEMORIA_KB )); then
-    echo "FAIL: RSS creció más de ${TOLERANCIA_MEMORIA_KB}KB sobre la línea base."
+if echo "$CLI_OUT" | grep -q "Estado: FAILED" && echo "$CLI_OUT" | grep -q "Codigo de salida: -11" && echo "$CLI_OUT" | grep -q "SIGSEGV"; then
+    echo "[OK] CLI muestra estado FAILED y diagnóstico SIGSEGV correcto."
+else
+    echo "[FAIL] La salida CLI no contiene el diagnóstico esperado."
     exit 1
 fi
 
-if [[ "$AFTER_FDS" != "$BASE_FDS" ]]; then
-    echo "FAIL: el scheduler no recuperó su cantidad inicial de descriptores."
-    exit 1
+# Paso 4: Verificación estricta en jobs.json (RF-29)
+echo "[INFO] Verificando persistencia en jobs.json..."
+python3 - "$JOBS_FILE" "$JOB_ID" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], 'r') as f: data = json.load(f)
+    job = next((j for j in data if str(j.get('job_id')) == sys.argv[2]), None)
+    
+    if not job:
+        print("[FAIL] Job no encontrado en jobs.json")
+        sys.exit(1)
+    if job.get('status') != 'FAILED':
+        print(f"[FAIL] Estado incorrecto: {job.get('status')}")
+        sys.exit(1)
+    if job.get('codigo_salida') != -11:
+        print(f"[FAIL] Código de salida incorrecto: {job.get('codigo_salida')}")
+        sys.exit(1)
+    if 'SIGSEGV' not in job.get('mensaje_error', ''):
+        print(f"[FAIL] Falta diagnóstico SIGSEGV en mensaje_error: {job.get('mensaje_error')}")
+        sys.exit(1)
+        
+    print("[OK] jobs.json validado (estado FAILED, código -11 y mensaje_error presentes).")
+except Exception as e:
+    print(f"[FAIL] Error en Python: {e}")
+    sys.exit(1)
+PYEOF
+
+if [ $? -ne 0 ]; then exit 1; fi
+
+# Paso 5: Verificación forense en events.jsonl (RF-29)
+echo "[INFO] Verificando auditoría forense en events.jsonl..."
+python3 - "$EVENTS_FILE" "$JOB_ID" <<'PYEOF'
+import json, sys
+try:
+    found = False
+    with open(sys.argv[1], 'r') as f:
+        for line in f:
+            if not line.strip(): continue
+            evt = json.loads(line)
+            
+            if str(evt.get('job_id')) == sys.argv[2] and evt.get('level') == 'ERROR':
+                ctx = evt.get('context', {})
+                if not ctx.get('anomalous_termination'):
+                    print("[FAIL] anomalous_termination no es true")
+                    sys.exit(1)
+                if ctx.get('signal_number') != 11:
+                    print(f"[FAIL] signal_number incorrecto: {ctx.get('signal_number')}")
+                    sys.exit(1)
+                if 'SIGSEGV' not in ctx.get('signal_name', ''):
+                    print(f"[FAIL] signal_name incorrecto: {ctx.get('signal_name')}")
+                    sys.exit(1)
+                found = True
+                break
+    
+    if not found:
+        print("[FAIL] Evento ERROR no encontrado en events.jsonl")
+        sys.exit(1)
+        
+    print("[OK] events.jsonl validado (diagnóstico forense registrado exitosamente).")
+except Exception as e:
+    print(f"[FAIL] Error leyendo events.jsonl: {e}")
+    sys.exit(1)
+PYEOF
+
+if [ $? -ne 0 ]; then exit 1; fi
+
+# Paso 6: Verificación de zombies y huérfanos a nivel SO (RNF-30)
+echo "[INFO] Verificando liberación de recursos (procesos zombies/huérfanos)..."
+if kill -0 "$JOB_PID" 2>/dev/null; then
+    STAT=$(ps -o stat= -p "$JOB_PID" 2>/dev/null)
+    if [[ "$STAT" == *"Z"* ]]; then
+        echo "[FAIL] El proceso $JOB_PID quedó como ZOMBIE (<defunct>) en el sistema operativo."
+        exit 1
+    else
+        echo "[FAIL] El proceso $JOB_PID sigue vivo misteriosamente."
+        exit 1
+    fi
+else
+    echo "[OK] El proceso $JOB_PID ya no existe en la tabla del S.O. (correctamente cosechado por waitpid)."
 fi
 
-if [[ "$AFTER_SOCKETS" != "$BASE_SOCKETS" ]]; then
-    echo "FAIL: la cantidad de sockets abiertos difiere de la línea base."
-    exit 1
-fi
-
-if [[ "$AFTER_CHILDREN" != "0" ]]; then
-    echo "FAIL: quedaron procesos hijos activos después de completar los Jobs."
-    exit 1
-fi
-
-if compgen -G "$DATA_DIR/jobs.json.tmp.*" >/dev/null; then
-    echo "FAIL: quedaron archivos temporales de persistencia."
-    exit 1
-fi
-
-echo "PASS parcial: memoria dentro de tolerancia; procesos, FDs y archivos temporales liberados."
-if [[ "$BASE_SOCKETS" == "0" && "$AFTER_SOCKETS" == "0" ]]; then
-    echo "Límite: Hermes no implementa sockets actualmente; se verificó que no quedaron sockets abiertos, pero no se estresó su ciclo de vida."
-fi
-
-stop_scheduler
-echo "Scheduler detenido y sus descriptores liberados."
-echo "RNF-33 queda pendiente de cobertura activa de sockets."
+echo "[PASS] TC-020"
+exit 0

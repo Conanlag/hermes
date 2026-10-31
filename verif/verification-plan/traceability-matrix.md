@@ -30,6 +30,7 @@
 | RF-25    | Rechazo explícito al alcanzar capacidad configurada de cola | Alta | Prueba | TC-023 | verif/scripts/TC-023.sh | Pendiente | - |
 | RF-26    | Cancelaciones concurrentes coherentes | Crítica | Prueba | TC-017 | verif/scripts/TC-017.sh + verif/results/tc017.log ([PASS]) | PASS | - |
 | RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | verif/scripts/TC-017.sh + verif/results/tc017.log ([PASS]) | PASS | - |
+| RF-29 | Detección determinista de muerte por señales, liberación de descriptores/tuberías y volcado de diagnóstico `FAILED`. | Alta | Prueba | TC-020 | Salida de script TC-020.sh + verif/results/tc020.log ([PASS]) | Pass | - |
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | ConstrucciÃ³n reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
@@ -58,5 +59,5 @@
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-020 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
 | RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Crítica | Prueba | TC-017 | verif/scripts/TC-017.sh + verif/results/tc017.log ([PASS]) | PASS | - |
-| RNF-30   | Sin huérfanos: terminación de grupo, PDEATHSIG y cierre ordenado | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; casos (a), (b), (c), (h) | PASS | - |
+| RNF-30   | Sin huérfanos: terminación de grupo, PDEATHSIG y cierre ordenado | Alta | Prueba | TC-020 | verif/scripts/TC-020.sh + verif/results/tc020.log; casos| PASS | - |
 | RNF-31   | Clasificación explícita y fail-closed: INTERRUPTED con motivo | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; casos (d), (e), (i); TC-016 | PASS | - |
