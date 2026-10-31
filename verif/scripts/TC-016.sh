@@ -1,202 +1,126 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# TC-016: Saturación de cola y rechazo explícito (Robustez)
+# RF-25, RNF-29
+# Uso: bash verif/scripts/TC-016.sh
+# Evidencia: verif/results/tc016.log
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-HERMES="$REPO/src/hermes/hermes"
-TEST_ROOT="$(mktemp -d)"
-TEST_HOME="$TEST_ROOT/home"
-DATA="$TEST_HOME/.local/share/hermes/data/jobs.json"
-LOCK="$TEST_HOME/.local/share/hermes/data/scheduler.lock"
-RESULTS_DIR="$REPO/verif/results"
-RESULTS_FILE="$RESULTS_DIR/results_TC-016.md"
+mkdir -p "$REPO/verif/results"
+LOG="$REPO/verif/results/tc016.log"
+: > "$LOG"
+exec > >(tee -a "$LOG") 2>&1
 
-mkdir -p "$RESULTS_DIR"
-{
-    printf '\n## Ejecucion: %s\n\n' "$(date '+%Y-%m-%d %H:%M:%S %z')"
-    printf '```text\n'
-} >>"$RESULTS_FILE"
-exec > >(tee -a "$RESULTS_FILE") 2>&1
+echo "=== Ejecutando TC-016 ==="
+echo "[INFO] Fecha/Hora: $(date)"
+echo "[INFO] Directorio raíz: ${REPO}"
 
-find_scheduler_pid() {
-    local descriptor target process_path
-    for descriptor in /proc/[0-9]*/fd/*; do
-        [[ -e "$descriptor" ]] || continue
-        target="$(readlink "$descriptor" 2>/dev/null || true)"
-        if [[ "$target" == "$LOCK" ]]; then
-            process_path="${descriptor#/proc/}"
-            printf '%s\n' "${process_path%%/*}"
-            return 0
-        fi
-    done
-    return 0
-}
+cd "$REPO/src/hermes" || exit 1
 
-stop_scheduler() {
-    local scheduler_pid
-    scheduler_pid="$(find_scheduler_pid)"
-    if [[ -n "$scheduler_pid" ]]; then
-        kill "$scheduler_pid" 2>/dev/null || true
-        for _ in $(seq 1 50); do
-            [[ -z "$(find_scheduler_pid)" ]] && return 0
-            sleep 0.1
-        done
-        echo "FAIL: el scheduler no libero scheduler.lock."
-        return 1
-    fi
-}
+# Aislamiento: HOME temporal por prueba para proteger datos reales
+TEST_HOME="$(mktemp -d)"
+export HOME="$TEST_HOME"
+DATA_DIR="${HOME}/.local/share/hermes/data"
+mkdir -p "${DATA_DIR}"
+JOBS_FILE="${DATA_DIR}/jobs.json"
+CONFIG_FILE="${DATA_DIR}/config.json"
 
 cleanup() {
-    local scheduler_pid
-    scheduler_pid="$(find_scheduler_pid)"
-    if [[ -n "$scheduler_pid" ]]; then
-        kill "$scheduler_pid" 2>/dev/null || true
-    fi
-    rm -rf "$TEST_ROOT"
-    printf '```\n'
+    # Matamos todos los sleep y al scheduler si quedaron vivos en el entorno temporal
+    pkill -f "sleep 60" 2>/dev/null || true
+    pkill -f "hermes.*scheduler" 2>/dev/null || true
+    rm -rf "$TEST_HOME"
 }
 trap cleanup EXIT
 
-read_job_field() {
-    perl -MJSON::PP -e '
-        use strict;
-        use warnings;
-        my ($path, $wanted_id, $field) = @ARGV;
-        open my $file, "<", $path or die "No se pudo abrir $path: $!";
-        local $/;
-        my $jobs = decode_json(<$file>);
-        ref($jobs) eq "ARRAY" or die "jobs.json no es un arreglo\n";
-        my ($job) = grep {
-            ref($_) eq "HASH" && defined($_->{job_id}) &&
-            $_->{job_id} eq $wanted_id
-        } @$jobs;
-        die "No existe el Job $wanted_id\n" unless $job;
-        my $value = $job->{$field};
-        print defined($value) ? $value : "";
-    ' "$DATA" "$1" "$2"
+# Paso 1: Configurar el entorno (Límite de cola = 5)
+echo "[INFO] Configurando capacidad de la cola en config.json (Límite: 5)..."
+cat <<EOF > "$CONFIG_FILE"
+{
+  "trabajos_maximos": 5
 }
+EOF
 
-if [[ ! -x "$HERMES" ]]; then
-    echo "FAIL: no existe $HERMES. Compila Hermes antes de ejecutar la prueba."
+# Paso 2: Compilar
+echo "[INFO] Compilando proyecto..."
+make clean && make > /dev/null
+echo "[INFO] Compilación limpia OK."
+
+HERMES_BIN="./hermes"
+if [ ! -x "${HERMES_BIN}" ]; then
+    echo "[FAIL] No se encontró binario ejecutable 'hermes'."
     exit 1
 fi
 
-export HOME="$TEST_HOME"
-
-SALIDA="$("$HERMES" job true 2>&1)"
-printf '%s\n' "$SALIDA"
-JOB_ID="$(printf '%s\n' "$SALIDA" | sed -n 's/^job ID: *//p' | head -n 1)"
-if [[ ! "$JOB_ID" =~ ^[0-9]+$ ]]; then
-    echo "FAIL: no se pudo obtener un ID válido para el Job terminado."
-    exit 1
-fi
-
-ESTADO=""
-for _ in $(seq 1 100); do
-    ESTADO="$(read_job_field "$JOB_ID" status)"
-    [[ "$ESTADO" == "SUCCEEDED" ]] && break
-    sleep 0.1
+# Paso 3: Saturar la cola con 5 trabajos de larga duración
+echo "[INFO] Encolando 5 trabajos consecutivos para saturar la capacidad..."
+for i in {1..5}; do
+    OUT="$("${HERMES_BIN}" job sleep 60 2>&1)"
+    if echo "$OUT" | grep -q "job ID:"; then
+        echo "  - Trabajo $i encolado exitosamente."
+    else
+        echo "[FAIL] Error prematuro al encolar el trabajo $i."
+        echo "Salida: $OUT"
+        exit 1
+    fi
 done
-if [[ "$ESTADO" != "SUCCEEDED" ]]; then
-    echo "FAIL: el Job $JOB_ID no alcanzó SUCCEEDED."
-    exit 1
-fi
-echo "Job terminado antes del reinicio: $JOB_ID ($ESTADO)"
 
-stop_scheduler
+# Damos un instante para que el scheduler asiente los trabajos
+sleep 1
 
-INTERRUPTED_ID="$((JOB_ID + 1))"
-perl -MJSON::PP -e '
-    use strict;
-    use warnings;
-    my ($path, $id) = @ARGV;
-    open my $file, "<", $path or die "No se pudo abrir $path: $!";
-    local $/;
-    my $jobs = decode_json(<$file>);
-    push @$jobs, {
-        job_id => 0 + $id,
-        pid => 999999,
-        programa => "proceso-interrumpido",
-        argumentos => ["argumento-prueba"],
-        status => "RUNNING",
-        tiempo_recepcion => "2026-01-02 03:04:05",
-        tiempo_inicio => "2026-01-02 03:04:06",
-        tiempo_terminacion => "",
-        codigo_salida => -1,
-        cancel_requested => JSON::PP::false
-    };
-    open my $out, ">", $path or die "No se pudo escribir $path: $!";
-    print {$out} JSON::PP->new->utf8->canonical->pretty->encode($jobs);
-    close $out or die "No se pudo cerrar $path: $!";
-' "$DATA" "$INTERRUPTED_ID"
+# Paso 4: Inyectar sobrecarga (Sexto trabajo)
+echo "[INFO] Intentando encolar el sexto trabajo (Debe ser rechazado)..."
+OVERLOAD_OUT=$("${HERMES_BIN}" job echo "Soy el sexto" 2>&1)
+OVERLOAD_RC=$?
 
-"$HERMES" filter id "$JOB_ID" >/dev/null
+echo "[INFO] Código de salida de la sexta petición: $OVERLOAD_RC"
+echo "[INFO] Salida en CLI de la sexta petición:"
+echo "$OVERLOAD_OUT"
 
-ESTADO=""
-for _ in $(seq 1 100); do
-    ESTADO="$(read_job_field "$INTERRUPTED_ID" status)"
-    [[ "$ESTADO" == "INTERRUPTED" ]] && break
-    sleep 0.1
-done
-if [[ "$ESTADO" != "INTERRUPTED" ]]; then
-    echo "FAIL: el Job $INTERRUPTED_ID no se recuperó como INTERRUPTED."
+# Validación CLI (RF-25, RNF-29)
+if [ $OVERLOAD_RC -eq 0 ]; then
+    echo "[FAIL] La sexta petición devolvió un código de éxito (0). Se esperaba un error."
     exit 1
 fi
 
-if ! perl -MJSON::PP -e '
-    use strict;
-    use warnings;
-    my ($path, $completed_id, $interrupted_id) = @ARGV;
-    open my $file, "<", $path or die "No se pudo abrir $path: $!";
-    local $/;
-    my $jobs = decode_json(<$file>);
-    ref($jobs) eq "ARRAY" or die "jobs.json no es un arreglo\n";
-    my %by_id = map { $_->{job_id} => $_ } @$jobs;
-    my $completed = $by_id{$completed_id}
-        or die "Se perdió el Job terminado\n";
-    $completed->{status} eq "SUCCEEDED"
-        or die "Cambió el estado del Job terminado\n";
-    $completed->{programa} eq "true"
-        or die "Se perdió el programa del Job terminado\n";
-    ref($completed->{argumentos}) eq "ARRAY" &&
-        @{$completed->{argumentos}} == 0
-        or die "Se perdieron los argumentos del Job terminado\n";
-    $completed->{codigo_salida} == 0
-        or die "Se perdió el resultado del Job terminado\n";
-    for my $field (qw(tiempo_recepcion tiempo_inicio tiempo_terminacion)) {
-        defined($completed->{$field}) && $completed->{$field} ne ""
-            or die "Se perdió $field del Job terminado\n";
-    }
-
-    my $interrupted = $by_id{$interrupted_id}
-        or die "Se perdió el Job interrumpido\n";
-    $interrupted->{status} eq "INTERRUPTED"
-        or die "El Job interrumpido no quedó en INTERRUPTED\n";
-    $interrupted->{motivo} eq "sin_identidad"
-        or die "El motivo del Job interrumpido no es sin_identidad\n";
-    !$interrupted->{proceso_terminado}
-        or die "No se debe afirmar terminación de un proceso no verificable\n";
-    $interrupted->{programa} eq "proceso-interrumpido"
-        or die "Se perdió el programa del Job interrumpido\n";
-    ref($interrupted->{argumentos}) eq "ARRAY" &&
-        @{$interrupted->{argumentos}} == 1 &&
-        $interrupted->{argumentos}[0] eq "argumento-prueba"
-        or die "Se perdieron los argumentos del Job interrumpido\n";
-    $interrupted->{tiempo_recepcion} eq "2026-01-02 03:04:05"
-        or die "Se perdió tiempo_recepcion del Job interrumpido\n";
-    $interrupted->{tiempo_inicio} eq "2026-01-02 03:04:06"
-        or die "Se perdió tiempo_inicio del Job interrumpido\n";
-    $interrupted->{codigo_salida} == -1
-        or die "El código de salida del Job interrumpido es incorrecto\n";
-    defined($interrupted->{mensaje_error}) &&
-        $interrupted->{mensaje_error} =~ /interrumpido por reinicio/
-        or die "Falta el mensaje de interrupción\n";
-    defined($interrupted->{tiempo_terminacion}) &&
-        $interrupted->{tiempo_terminacion} ne ""
-        or die "Falta el tiempo de terminación del Job interrumpido\n";
-    print "Metadatos y resultados verificados para ambos Jobs.\n";
-' "$DATA" "$JOB_ID" "$INTERRUPTED_ID"; then
-    echo "FAIL: la persistencia posterior al reinicio no coincide con lo esperado."
+if echo "$OVERLOAD_OUT" | grep -qi -E "límite|rechazad|llena|capacidad|excedid"; then
+    echo "[OK] El sistema rechazó la petición con un mensaje coherente en CLI."
+else
+    echo "[FAIL] La sexta petición falló, pero no mostró un mensaje de rechazo explícito."
     exit 1
 fi
 
-echo "PASS: los Jobs terminados conservan metadatos y resultados; los RUNNING no verificables se recuperan como INTERRUPTED."
+# Paso 5: Verificación de estabilidad y estado intacto (RNF-29)
+echo "[INFO] Verificando estabilidad del sistema tras el desbordamiento..."
+STABILITY_CHECK=$("${HERMES_BIN}" filter status RUNNING 2>&1)
+if echo "$STABILITY_CHECK" | grep -q "Job ID: 5"; then
+    echo "[OK] Los primeros 5 trabajos siguen bajo supervisión y el sistema no colapsó."
+else
+    echo "[FAIL] El sistema perdió el control de los trabajos tras el rechazo."
+    exit 1
+fi
+
+# Paso 6: Conteo matemático estricto en JSON (RNF-29)
+echo "[INFO] Validando matemáticamente el límite de la cola en jobs.json..."
+python3 - "$JOBS_FILE" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], 'r') as f:
+        data = json.load(f)
+    
+    total_trabajos = len(data)
+    print(f"[INFO] Trabajos registrados en jobs.json: {total_trabajos}")
+    
+    if total_trabajos != 5:
+        print(f"[FAIL] El archivo jobs.json contiene {total_trabajos} trabajos en lugar de los 5 permitidos.")
+        sys.exit(1)
+        
+    print("[OK] (RNF-29) Límite de persistencia respetado matemáticamente. El sexto trabajo jamás se registró.")
+except Exception as e:
+    print(f"[FAIL] Error leyendo jobs.json: {e}")
+    sys.exit(1)
+PYEOF
+
+if [ $? -ne 0 ]; then exit 1; fi
+
+echo "[PASS] TC-016"
+exit 0
