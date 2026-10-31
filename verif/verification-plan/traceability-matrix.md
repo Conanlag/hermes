@@ -7,7 +7,7 @@
 | RF-02    | Validacion de solicitudes con mensaje util | Alta        | Prueba  | TC-001    | verif/scripts/TC-001.sh + verif/results/tc001.log ([PASS]) | PASS        | -                   |
 | RF-03    | Cola inicial cuando no hay capacidad inmediata | Alta        | Prueba  | TC-002    | verif/scripts/TC-002.sh + verif/results/tc002.log ([PASS]) | PASS | -                   |
 | RF-04    |                     |             |          |           |             | Pendiente   |                     |
-| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-024 | verif/scripts/TC-024.sh ([PASS]) | PASS | - |
+| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-025 | verif/scripts/TC-025.sh; verif/results/results.md ([PASS], 2026-10-30) | PASS | - |
 | RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED | CrÃ­tica     | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([PASS]) | PASS        | -                   |
 | RF-07    | Tiempos de recepciÃ³n, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
 | RF-08    | Consulta de un trabajo mediante ID | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
@@ -57,7 +57,7 @@
 | RNF-24   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-25   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-020 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
+| RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-024 | verif/scripts/TC-024.sh + verif/results/results_TC-024.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
 | RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Alta | Prueba de concurrencia | TC-019 | verif/scripts/TC-019.sh; 10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
 | RNF-30   | Sin huérfanos: terminación de grupo, PDEATHSIG y cierre ordenado | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; casos (a), (b), (c), (h) | PASS | - |
 | RNF-31   | Clasificación explícita y fail-closed: INTERRUPTED con motivo | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; casos (d), (e), (i); TC-016 | PASS | - |
