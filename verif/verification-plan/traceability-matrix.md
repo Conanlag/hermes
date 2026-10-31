@@ -30,6 +30,7 @@
 | RF-25    | Rechazo explícito al alcanzar capacidad configurada de cola | Alta | Prueba | TC-023 | verif/scripts/TC-023.sh | Pendiente | - |
 | RF-26    | Cancelaciones concurrentes coherentes | Alta | Prueba | TC-019 | verif/scripts/TC-019.sh; 10/10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
 | RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017, TC-018 | verif/scripts/TC-017.sh ([PASS]); TC-018 ejecutado 2026-10-30 21:48:51 -0600 ([PASS], código 0); verif/results/results_TC-018.md | PASS | - |
+| RF-30    | Escalamiento forzoso tras ignorar SIGTERM durante el periodo de gracia de 5 segundos | No especificada | Prueba | TC-021 | verif/scripts/TC-021.sh; verif/results/tc021.log ([PASS], código 0) | PASS | - |
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | ConstrucciÃ³n reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
@@ -57,6 +58,6 @@
 | RNF-25   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-020 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
-| RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Alta | Prueba de concurrencia | TC-021 | verif/scripts/TC-021.sh; 10 y 25 Jobs ([PASS]); verif/results/results_TC-021.md | PASS | - |
+| RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Alta | Prueba de concurrencia | TC-019 | verif/scripts/TC-019.sh; 10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
 | RNF-30   | Sin huérfanos: terminación de grupo, PDEATHSIG y cierre ordenado | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; casos (a), (b), (c), (h) | PASS | - |
 | RNF-31   | Clasificación explícita y fail-closed: INTERRUPTED con motivo | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; casos (d), (e), (i); TC-016 | PASS | - |
