@@ -29,7 +29,7 @@
 | RF-24    |                     |             |          |           |             | Pendiente   |                     |
 | RF-25    | Rechazo explícito al alcanzar capacidad configurada de cola | Alta | Prueba | TC-023 | verif/scripts/TC-023.sh | Pendiente | - |
 | RF-26    | Cancelaciones concurrentes coherentes | Alta | Prueba | TC-019 | verif/scripts/TC-019.sh; 10/10 iteraciones ([PASS]); verif/results/results_TC-019.md | PASS | - |
-| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017 | verif/scripts/TC-017.sh ([PASS]); verif/results/results_TC-017.md | PASS | - |
+| RF-27    | Solicitudes repetidas no crean Jobs contradictorios | Alta | Prueba | TC-017, TC-018 | verif/scripts/TC-017.sh ([PASS]); TC-018 ejecutado 2026-10-30 21:48:51 -0600 ([PASS], código 0); verif/results/results_TC-018.md | PASS | - |
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | ConstrucciÃ³n reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
