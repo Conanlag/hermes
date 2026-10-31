@@ -20,27 +20,27 @@ La prueba compara el scheduler antes y después de ejecutar los Jobs:
 
 ## Verificación
 
-El caso de estrés [TC-020](../../../verif/test-cases/TC-020.md) ejecuta por defecto 100 Jobs `true`, en lotes concurrentes de hasta 10, espera a que terminen y compara RSS, descriptores, sockets, procesos hijos y temporales. Puede probarse otro volumen, por ejemplo:
+El caso de estrés [TC-024](../../../verif/test-cases/TC-024.md) ejecuta por defecto 100 Jobs `true`, en lotes concurrentes de hasta 10, espera a que terminen y compara RSS, descriptores, sockets, procesos hijos y temporales. Puede probarse otro volumen, por ejemplo:
 
 ```bash
 make -C src/hermes
-bash verif/scripts/TC-020.sh 500
+bash verif/scripts/TC-024.sh 500
 ```
 
 La prueba usa un `HOME` temporal y limpia los datos al finalizar.
 
 ## Evidencia y cobertura
 
-Los resultados de TC-020 reportan RSS de `3588 KiB` en la línea base y `4484 KiB` después del estrés (incremento de `896 KiB`), cero procesos hijos, cero sockets y la misma cantidad de descriptores antes y después. El scheduler liberó sus descriptores al detenerse. La evidencia está en [results_TC-020.md](../../../verif/results/results_TC-020.md).
+La ejecución más reciente de TC-024 reporta RSS de `3596 KiB` en la línea base y `7696 KiB` después del estrés (incremento de `4100 KiB`), sin procesos hijos ni sockets abiertos y con los mismos cinco descriptores antes y después. El scheduler liberó sus descriptores al detenerse. Las ejecuciones históricas y la evidencia más reciente están en [results_TC-024.md](../../../verif/results/results_TC-024.md).
 
-**Estado: cobertura parcial.** Hermes no implementa actualmente una ruta que use sockets. TC-020 comprueba que no haya descriptores de socket abiertos al final, pero no estresa ni demuestra el ciclo de vida de sockets que nunca fueron abiertos por el servicio. RNF-33 requiere una prueba adicional cuando Hermes incorpore esa funcionalidad.
+**Estado: cobertura parcial.** Hermes no implementa actualmente una ruta que use sockets. TC-024 comprueba que no haya descriptores de socket abiertos al final, pero no estresa ni demuestra el ciclo de vida de sockets que nunca fueron abiertos por el servicio. RNF-33 requiere una prueba adicional cuando Hermes incorpore esa funcionalidad.
 
 ## Módulos o componentes afectados
 
 - `scheduler`: ciclo de vida de workers, procesos hijos y descriptores.
 - `process`: creación y recolección de procesos.
 - `storage`: cierre de archivos y limpieza de temporales.
-- `verif/scripts/TC-020.sh`: medición de memoria, descriptores, sockets, hijos y temporales.
+- `verif/scripts/TC-024.sh`: medición de memoria, descriptores, sockets, hijos y temporales.
 
 ## Restricciones tecnológicas o de arquitectura
 

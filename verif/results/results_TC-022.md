@@ -720,3 +720,133 @@ OK: (g) clean data no arrancó el scheduler.
 
 PASS: TC-022 cubrió (a) apagado ordenado con motivo=apagado y sin huérfanos, (b) sin RUNNING tras SIGKILL, (c) no mata PIDs ajenos, (d) QUEUED se ejecuta, (e) terminales intactos y estado desconocido fail-closed, (f) jobs.json y .bak parsean y los .tmp se limpian tras SIGKILL en escrituras, (g) clean data recupera una caída antes de borrar y no arranca daemon, (h) grupo sin líder terminado por sid, (i) sin_pid sin afirmar terminación; además, los Jobs no heredan locks.
 ```
+
+## Ejecucion: 2026-10-30 22:45:14 -0600
+
+```text
+== (a) SIGTERM al demonio con un Job sleep activo: cierre ordenado ==
+job ID: 1
+PID: 59290
+OK: (a) el coordinador terminó el grupo del hijo.
+OK: (a) fila INTERRUPTED (motivo=apagado, proceso_terminado=true), sin huérfano.
+
+== (b) SIGKILL al demonio con un Job sleep activo ==
+job ID: 2
+PID: 61256
+OK: (b) PDEATHSIG mató al hijo tras SIGKILL.
+OK: (b) no sobrevive ninguna fila RUNNING al reinicio.
+
+== (c) fila RUNNING con el PID vivo de un proceso ajeno ==
+OK: (c) el proceso ajeno 64425 sigue vivo: no se señaló un PID no verificado.
+
+== (d) QUEUED sigue pendiente y se ejecuta ==
+OK: (d) el Job QUEUED se conservó y se ejecutó (marcador creado).
+
+== (e) estados terminales intactos y estado desconocido fail-closed ==
+OK: (e) Job 5 terminal intacto (SUCCEEDED).
+OK: (e) Job 6 terminal intacto (FAILED).
+OK: (e) Job 7 terminal intacto (CANCELED).
+OK: (e) Job 8 terminal intacto (INTERRUPTED).
+OK: (e) estado desconocido se reclasificó INTERRUPTED (fail-closed).
+OK: (e) el filtro rechaza estados fuera del dominio y anuncia INTERRUPTED.
+OK: (e) el filtro acepta INTERRUPTED y lista las filas recuperadas.
+OK: (e) la ayuda documenta el estado INTERRUPTED.
+
+== (f) RNF-28: SIGKILL durante escrituras; jobs.json se conserva o recupera ==
+OK: (f) jobs.json parsea como arreglo tras el SIGKILL en escrituras.
+OK: (f) jobs.json.bak existe y parsea como arreglo.
+OK: (f) el arranque eliminó el jobs.json.tmp.* huérfano.
+OK: (f) jobs.json sigue parseando después de la recuperación.
+OK: (f) con jobs.json corrupto se leyó jobs.json.bak y se conservó la fila 5.
+OK: (f) jobs.json se reparó desde jobs.json.bak.
+
+== (i) fila RUNNING con pid=0: motivo=sin_pid ==
+OK: (i) sin_pid queda INTERRUPTED sin afirmar una terminación que no ocurrió.
+
+== (h) nietos que sobreviven a PDEATHSIG: el grupo sin líder se termina ==
+job ID: 51
+PID: 80524
+OK: (h) el líder y su nieto comparten grupo y sesión privada (sid=80517).
+OK: (h) el líder murió y el nieto 80525 sobrevivió (hueco reproducido).
+OK: (h) no queda ningún miembro vivo del grupo (proceso_terminado real).
+
+== Auditoría F1: los Jobs no heredan los locks del demonio ==
+OK: (F1) el demonio sí conserva scheduler.lock.
+OK: (F1) el Job 83501 no heredó scheduler.lock, jobs.lock ni archivos de datos.
+OK: (F1) el Job corre en su propio grupo (pgrp=pid=83501).
+OK: (F1) la identidad persistida coincide con /proc (boot_id + starttime).
+
+== (g) clean data tras una caída: recupera antes de borrar y no arranca daemon ==
+job ID: 53
+PID: 86586
+[34mHistorial de trabajos limpiado correctamente.[0m
+OK: (g) clean data recuperó la caída y limpió el historial.
+OK: (g) clean data no arrancó el scheduler.
+
+PASS: TC-022 cubrió (a) apagado ordenado con motivo=apagado y sin huérfanos, (b) sin RUNNING tras SIGKILL, (c) no mata PIDs ajenos, (d) QUEUED se ejecuta, (e) terminales intactos y estado desconocido fail-closed, (f) jobs.json y .bak parsean y los .tmp se limpian tras SIGKILL en escrituras, (g) clean data recupera una caída antes de borrar y no arranca daemon, (h) grupo sin líder terminado por sid, (i) sin_pid sin afirmar terminación; además, los Jobs no heredan locks.
+```
+
+## Ejecucion: 2026-10-30 22:54:58 -0600
+
+```text
+== (a) SIGTERM al demonio con un Job sleep activo: cierre ordenado ==
+job ID: 1
+PID: 92596
+OK: (a) el coordinador terminó el grupo del hijo.
+OK: (a) fila INTERRUPTED (motivo=apagado, proceso_terminado=true), sin huérfano.
+
+== (b) SIGKILL al demonio con un Job sleep activo ==
+job ID: 2
+PID: 95858
+OK: (b) PDEATHSIG mató al hijo tras SIGKILL.
+OK: (b) no sobrevive ninguna fila RUNNING al reinicio.
+
+== (c) fila RUNNING con el PID vivo de un proceso ajeno ==
+OK: (c) el proceso ajeno 100194 sigue vivo: no se señaló un PID no verificado.
+
+== (d) QUEUED sigue pendiente y se ejecuta ==
+OK: (d) el Job QUEUED se conservó y se ejecutó (marcador creado).
+
+== (e) estados terminales intactos y estado desconocido fail-closed ==
+OK: (e) Job 5 terminal intacto (SUCCEEDED).
+OK: (e) Job 6 terminal intacto (FAILED).
+OK: (e) Job 7 terminal intacto (CANCELED).
+OK: (e) Job 8 terminal intacto (INTERRUPTED).
+OK: (e) estado desconocido se reclasificó INTERRUPTED (fail-closed).
+OK: (e) el filtro rechaza estados fuera del dominio y anuncia INTERRUPTED.
+OK: (e) el filtro acepta INTERRUPTED y lista las filas recuperadas.
+OK: (e) la ayuda documenta el estado INTERRUPTED.
+
+== (f) RNF-28: SIGKILL durante escrituras; jobs.json se conserva o recupera ==
+OK: (f) jobs.json parsea como arreglo tras el SIGKILL en escrituras.
+OK: (f) jobs.json.bak existe y parsea como arreglo.
+OK: (f) el arranque eliminó el jobs.json.tmp.* huérfano.
+OK: (f) jobs.json sigue parseando después de la recuperación.
+OK: (f) con jobs.json corrupto se leyó jobs.json.bak y se conservó la fila 5.
+OK: (f) jobs.json se reparó desde jobs.json.bak.
+
+== (i) fila RUNNING con pid=0: motivo=sin_pid ==
+OK: (i) sin_pid queda INTERRUPTED sin afirmar una terminación que no ocurrió.
+
+== (h) nietos que sobreviven a PDEATHSIG: el grupo sin líder se termina ==
+job ID: 51
+PID: 110591
+OK: (h) el líder y su nieto comparten grupo y sesión privada (sid=110578).
+OK: (h) el líder murió y el nieto 110593 sobrevivió (hueco reproducido).
+OK: (h) no queda ningún miembro vivo del grupo (proceso_terminado real).
+
+== Auditoría F1: los Jobs no heredan los locks del demonio ==
+OK: (F1) el demonio sí conserva scheduler.lock.
+OK: (F1) el Job 111791 no heredó scheduler.lock, jobs.lock ni archivos de datos.
+OK: (F1) el Job corre en su propio grupo (pgrp=pid=111791).
+OK: (F1) la identidad persistida coincide con /proc (boot_id + starttime).
+
+== (g) clean data tras una caída: recupera antes de borrar y no arranca daemon ==
+job ID: 53
+PID: 112925
+[34mHistorial de trabajos limpiado correctamente.[0m
+OK: (g) clean data recuperó la caída y limpió el historial.
+OK: (g) clean data no arrancó el scheduler.
+
+PASS: TC-022 cubrió (a) apagado ordenado con motivo=apagado y sin huérfanos, (b) sin RUNNING tras SIGKILL, (c) no mata PIDs ajenos, (d) QUEUED se ejecuta, (e) terminales intactos y estado desconocido fail-closed, (f) jobs.json y .bak parsean y los .tmp se limpian tras SIGKILL en escrituras, (g) clean data recupera una caída antes de borrar y no arranca daemon, (h) grupo sin líder terminado por sid, (i) sin_pid sin afirmar terminación; además, los Jobs no heredan locks.
+```
