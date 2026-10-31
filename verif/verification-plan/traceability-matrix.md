@@ -9,13 +9,13 @@
 | RF-04    |                     |             |          |           |             | Pendiente   |                     |
 | RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-024 | verif/scripts/TC-024.sh ([PASS]) | PASS | - |
 | RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED | CrÃ­tica     | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([PASS]) | PASS        | -                   |
-| RF-07    | Tiempos de recepciÃ³n, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
+| RF-07    | Tiempos de recepcion, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
 | RF-08    | Consulta de un trabajo mediante ID | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
-| RF-09    | Listado de trabajos con filtros bÃ¡sicos por estado | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
-| RF-10    | CancelaciÃ³n de trabajo en ejecuciÃ³n con resultado reflejado | CrÃ­tica     | Prueba  | TC-005    | verif/scripts/TC-005.sh + verif/results/tc005.log ([PASS]) | PASS        | -                   |
+| RF-09    | Listado de trabajos con filtros basicos por estado | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
+| RF-10    | Cancelacion de trabajo en ejecucion con resultado reflejado | CrÃ­tica     | Prueba  | TC-005    | verif/scripts/TC-005.sh + verif/results/tc005.log ([PASS]) | PASS        | -                   |
 | RF-11    | Captura separada de stdout y stderr | Alta        | Prueba  | TC-006    | verif/scripts/TC-006.sh + verif/results/tc006.log ([PASS]) | PASS        | -                   |
-| RF-12    | Persistencia de metadatos y resultados tras reinicio del scheduler | Alta | Prueba | TC-016 | verif/scripts/TC-016.sh + verif/results/results_TC-016.md ([PASS]) | PASS | - |
-| RF-13    | Recuperación tras reinicio: ningún RUNNING sobrevive, sin huérfanos y persistencia durable | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; verif/results/results_TC-022.md ([PASS]); TC-016 ([PASS]) | PASS | - |
+| RF-12    | Persistencia de metadatos y resultados tras reinicio del scheduler | Alta | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | PASS | - |
+| RF-13    | Recuperación tras reinicio: ningún RUNNING sobrevive, sin huérfanos y persistencia durable | Alta | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | PASS | - |
 | RF-14    |                     |             |          |           |             | Pendiente   |                     |
 | RF-15    |                     |             |          |           |             | Pendiente   |                     |
 | RF-16    |                     |             |          |           |             | Pendiente   |                     |
@@ -40,8 +40,8 @@
 | RNF-07   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-08   | Solicitud invalida no termina el servicio (local; desconexion en Fase 2) | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
 | RNF-09   | TerminaciÃ³n anormal de un trabajo no afecta a otros | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
-| RNF-10   | Ningún Job queda RUNNING si el demonio muere; recuperación al arrancar | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; casos (b), (c), (h) | PASS | - |
-| RNF-11   | Persistencia durable: jobs.json sobrevive a kill -9 y siempre parsea | Alta | Prueba | TC-022 | verif/scripts/TC-022.sh; casos (f) y (g) | PASS | - |
+| RNF-10 | Prevención de falsos positivos en supervisión: tras un reinicio, el sistema no reportará como RUNNING a procesos huérfanos. | Crítica | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | Pendiente | - |
+| RNF-11 | Escritura atómica y duradera (O_EXCL, fsync, rename) para evitar dejar jobs.json parcialmente actualizado o corrupto. | Crítica | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | Pendiente | - |
 | RNF-12   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-13   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-14   |                     |             |          |           |             | Pendiente   |                     |
