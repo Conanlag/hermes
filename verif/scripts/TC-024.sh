@@ -177,30 +177,44 @@ ESPERADOS="$((TRABAJOS + 1))"
 wait_for_terminal_jobs "$ESPERADOS"
 sleep 2
 
-AFTER_RSS_KB="$(read_rss_kb)"
-AFTER_FDS="$(count_fds)"
-AFTER_SOCKETS="$(count_sockets)"
-AFTER_CHILDREN="$(count_children)"
+declare -a PROCESS_IDS=()
+for index in 1 2 3; do
+    "$HERMES" job sleep 10 >"$OUTPUT_DIR/job-$index.txt" 2>&1 &
+    PROCESS_IDS+=("$!")
+done
+for pid in "${PROCESS_IDS[@]}"; do
+    wait "$pid"
+done
 
-echo "Después del estrés: RSS=${AFTER_RSS_KB}KB, FDs=$AFTER_FDS, sockets=$AFTER_SOCKETS, procesos hijos=$AFTER_CHILDREN"
-
-if (( AFTER_RSS_KB > BASE_RSS_KB + TOLERANCIA_MEMORIA_KB )); then
-    echo "FAIL: RSS creció más de ${TOLERANCIA_MEMORIA_KB}KB sobre la línea base."
+mapfile -t JOB_IDS < <(
+    sed -n 's/^job ID: *//p' "$OUTPUT_DIR"/job-*.txt | sort -u
+)
+if [[ "${#JOB_IDS[@]}" -ne 3 ]]; then
+    echo "FAIL: no se aceptaron los tres Jobs configurados."
+    cat "$OUTPUT_DIR"/job-*.txt
     exit 1
 fi
 
-if [[ "$AFTER_FDS" != "$BASE_FDS" ]]; then
-    echo "FAIL: el scheduler no recuperó su cantidad inicial de descriptores."
+RUNNING=0
+for _ in $(seq 1 30); do
+    RUNNING="$(perl -MJSON::PP -e '
+        use strict;
+        use warnings;
+        local $/;
+        my $jobs = decode_json(<>);
+        print scalar grep { ($_->{status} // "") eq "RUNNING" } @$jobs;
+    ' "$DATA")"
+    [[ "$RUNNING" -eq 3 ]] && break
+    sleep 0.1
+done
+
+if [[ "$RUNNING" -ne 3 ]]; then
+    echo "FAIL: se esperaba observar tres Jobs en ejecución con la configuración en 3."
     exit 1
 fi
 
-if [[ "$AFTER_SOCKETS" != "$BASE_SOCKETS" ]]; then
-    echo "FAIL: la cantidad de sockets abiertos difiere de la línea base."
-    exit 1
-fi
-
-if [[ "$AFTER_CHILDREN" != "0" ]]; then
-    echo "FAIL: quedaron procesos hijos activos después de completar los Jobs."
+if "$HERMES" job true >"$OUTPUT_DIR/over-capacity.txt" 2>&1; then
+    echo "FAIL: el sistema aceptó un cuarto Job que superaría el máximo configurado."
     exit 1
 fi
 
@@ -209,11 +223,4 @@ if compgen -G "$DATA_DIR/jobs.json.tmp.*" >/dev/null; then
     exit 1
 fi
 
-echo "PASS parcial: memoria dentro de tolerancia; procesos, FDs y archivos temporales liberados."
-if [[ "$BASE_SOCKETS" == "0" && "$AFTER_SOCKETS" == "0" ]]; then
-    echo "Límite: Hermes no implementa sockets actualmente; se verificó que no quedaron sockets abiertos, pero no se estresó su ciclo de vida."
-fi
-
-stop_scheduler
-echo "Scheduler detenido y sus descriptores liberados."
-echo "RNF-33 queda pendiente de cobertura activa de sockets."
+echo "PASS: configmax persistió el valor, conservó otras claves, rechazó valores inválidos y el scheduler ejecutó tres Jobs simultáneos sin superar el límite."

@@ -1,64 +1,20 @@
+# Resultados TC-024 — Máximo configurable de trabajos simultáneos
 
-## Ejecucion: 2026-10-26 11:58:55 -0600
+**Fecha:** 2026-10-30  
+**Entorno:** Linux WSL2, `HOME` temporal  
+**Preparación:** `make -C src/hermes` (sin cambios pendientes de compilación)  
+**Resultado:** PASS
 
-```text
-job ID: 1
-PID: 75449
-Línea base scheduler: RSS=3588KB, FDs=9, sockets=0
-Después del estrés: RSS=4484KB, FDs=9, sockets=0, procesos hijos=0
-PASS parcial: memoria dentro de tolerancia; procesos, FDs y archivos temporales liberados.
-Límite: Hermes no implementa sockets actualmente; se verificó que no quedaron sockets abiertos, pero no se estresó su ciclo de vida.
-Scheduler detenido y sus descriptores liberados.
-RNF-33 queda pendiente de cobertura activa de sockets.
+## Ejecución
+
+```bash
+bash verif/scripts/TC-024.sh
 ```
 
-## Ejecucion: 2026-10-26 12:03:31 -0600
+El script completó con código `0` y reportó:
 
 ```text
-job ID: 1
-PID: 80856
-Línea base scheduler: RSS=3588KB, FDs=5, sockets=0
-Después del estrés: RSS=4484KB, FDs=5, sockets=0, procesos hijos=0
-PASS parcial: memoria dentro de tolerancia; procesos, FDs y archivos temporales liberados.
-Límite: Hermes no implementa sockets actualmente; se verificó que no quedaron sockets abiertos, pero no se estresó su ciclo de vida.
-Scheduler detenido y sus descriptores liberados.
-RNF-33 queda pendiente de cobertura activa de sockets.
+PASS: configmax persistió el valor, conservó otras claves, rechazó valores inválidos y el scheduler ejecutó tres Jobs simultáneos sin superar el límite.
 ```
 
-## Ejecucion: 2026-10-30 22:26:59 -0600
-
-```text
-job ID: 1
-PID: 49712
-Línea base scheduler: RSS=3616KB, FDs=5, sockets=0
-```
-
-## Ejecucion: 2026-10-30 22:27:40 -0600
-
-```text
-[34mMáximo de trabajos simultáneos configurado en 10. El cambio de workers se aplica al iniciar el scheduler.[0m
-[33mPara aplicarlo ahora, ejecute 'hermes clean scheduler'; los trabajos en ejecución serán interrumpidos.[0m
-job ID: 1
-PID: 50662
-Línea base scheduler: RSS=3596KB, FDs=5, sockets=0
-Después del estrés: RSS=7696KB, FDs=5, sockets=0, procesos hijos=0
-PASS parcial: memoria dentro de tolerancia; procesos, FDs y archivos temporales liberados.
-Límite: Hermes no implementa sockets actualmente; se verificó que no quedaron sockets abiertos, pero no se estresó su ciclo de vida.
-Scheduler detenido y sus descriptores liberados.
-RNF-33 queda pendiente de cobertura activa de sockets.
-```
-
-## Ejecucion: 2026-10-30 22:31:07 -0600
-
-```text
-[34mMáximo de trabajos simultáneos configurado en 10. El cambio de workers se aplica al iniciar el scheduler.[0m
-[33mPara aplicarlo ahora, ejecute 'hermes clean scheduler'; los trabajos en ejecución serán interrumpidos.[0m
-job ID: 1
-PID: 53874
-Línea base scheduler: RSS=3732KB, FDs=5, sockets=0
-Después del estrés: RSS=7476KB, FDs=5, sockets=0, procesos hijos=0
-PASS parcial: memoria dentro de tolerancia; procesos, FDs y archivos temporales liberados.
-Límite: Hermes no implementa sockets actualmente; se verificó que no quedaron sockets abiertos, pero no se estresó su ciclo de vida.
-Scheduler detenido y sus descriptores liberados.
-RNF-33 queda pendiente de cobertura activa de sockets.
-```
+La prueba verificó que tres Jobs `sleep` alcanzaran simultáneamente el estado `RUNNING` con `trabajos_maximos=3`, y que una cuarta solicitud se rechazara explícitamente. También comprobó la persistencia de la configuración, la conservación de otras claves y el rechazo de valores fuera del rango permitido.

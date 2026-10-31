@@ -34,10 +34,12 @@
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | Construccion reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
+| RNF-04   | Al menos 3 Jobs simultáneos con el límite configurado en 3 | Alta | Prueba de concurrencia | TC-024 | verif/scripts/TC-024.sh + verif/results/results_TC-024.md ([PASS]) | PASS | - |
+| RNF-05   | Consulta de estado en menos de 1 s con 100 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; evidencia acumulada en verif/results/results_TC-018.md | PASS | - |
 | RNF-04   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-05   | Consulta de programa en menos de 1 s con al menos 100 Jobs | Alta | Prueba | TC-004 | verif/scripts/TC-004.sh; verif/results/tc004.log (100 Jobs en 0.013 s, [PASS]) | PASS | - |
 | RNF-06   | Conservación de metadatos para al menos 500 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; fixture de 519 registros validado | PASS | - |
-| RNF-07   |                     |             |          |           |             | Pendiente   |                     |
+| RNF-07   | Los procesos hijo concurrentes no superan trabajos_maximos | Alta | Prueba de concurrencia | TC-023, TC-024 | verif/scripts/TC-023.sh y TC-024.sh; verif/results/results_TC-023.md y results_TC-024.md ([PASS]) | PASS | - |
 | RNF-08   | Solicitud invalida no termina el servicio (local; desconexion en Fase 2) | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
 | RNF-09   | TerminaciÃ³n anormal de un trabajo no afecta a otros | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
 | RNF-10 | Prevención de falsos positivos en supervisión: tras un reinicio, el sistema no reportará como RUNNING a procesos huérfanos. | Crítica | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | Pendiente | - |
