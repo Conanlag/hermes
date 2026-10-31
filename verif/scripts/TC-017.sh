@@ -1,197 +1,151 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# TC-017: Cancelaciones concurrentes (Robustez)
+# RF-26, RNF-27
+# Uso: bash verif/scripts/TC-017.sh
+# Evidencia: verif/results/tc017.log
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-HERMES="$REPO/src/hermes/hermes"
+mkdir -p "$REPO/verif/results"
+LOG="$REPO/verif/results/tc017.log"
+: > "$LOG"
+exec > >(tee -a "$LOG") 2>&1
+
+echo "=== Ejecutando TC-017 ==="
+echo "[INFO] Fecha/Hora: $(date)"
+echo "[INFO] Directorio raíz: ${REPO}"
+
+cd "$REPO/src/hermes" || exit 1
+
+# Aislamiento: HOME temporal por prueba (idéntico a TC-004)
 TEST_HOME="$(mktemp -d)"
-DATA="$TEST_HOME/.local/share/hermes/data/jobs.json"
-LOCK="$TEST_HOME/.local/share/hermes/data/scheduler.lock"
-OUTPUT_DIR="$TEST_HOME/output"
-RESULTS_DIR="$REPO/verif/results"
-RESULTS_FILE="$RESULTS_DIR/results_TC-017.md"
-mkdir -p "$OUTPUT_DIR" "$RESULTS_DIR"
-
-{
-    printf '\n## Ejecucion: %s\n\n' "$(date '+%Y-%m-%d %H:%M:%S %z')"
-    printf '```text\n'
-} >>"$RESULTS_FILE"
-exec > >(tee -a "$RESULTS_FILE") 2>&1
-
-find_scheduler_pid() {
-    local descriptor target
-    for descriptor in /proc/[0-9]*/fd/*; do
-        [[ -e "$descriptor" ]] || continue
-        target="$(readlink "$descriptor" 2>/dev/null || true)"
-        if [[ "$target" == "$LOCK" ]]; then
-            local process_path="${descriptor#/proc/}"
-            printf '%s\n' "${process_path%%/*}"
-            return 0
-        fi
-    done
-    return 0
-}
-
-read_job_value() {
-    local job_id="$1"
-    local field="$2"
-    perl -MJSON::PP -e '
-        use strict;
-        use warnings;
-        my ($path, $wanted_id, $field) = @ARGV;
-        open my $file, "<", $path or die "No se pudo abrir $path: $!";
-        local $/;
-        my $jobs = decode_json(<$file>);
-        ref($jobs) eq "ARRAY" or die "jobs.json no es un arreglo\n";
-        my ($job) = grep {
-            ref($_) eq "HASH" && defined($_->{job_id}) &&
-            $_->{job_id} eq $wanted_id
-        } @$jobs;
-        die "No existe el Job $wanted_id\n" unless $job;
-        my $value = $job->{$field};
-        if (!defined $value) {
-            print "";
-        } elsif (ref($value) eq "ARRAY" || ref($value) eq "HASH") {
-            print encode_json($value);
-        } else {
-            print $value;
-        }
-    ' "$DATA" "$job_id" "$field"
-}
+export HOME="$TEST_HOME"
+DATA_DIR="${HOME}/.local/share/hermes/data"
+mkdir -p "${DATA_DIR}"
+JOBS_FILE="${DATA_DIR}/jobs.json"
+echo "[]" > "${JOBS_FILE}"
+echo "[INFO] jobs.json inicializado en entorno aislado."
 
 cleanup() {
-    local id scheduler_pid
-    if [[ -f "$DATA" ]]; then
-        while IFS= read -r id; do
-            [[ -n "$id" ]] && "$HERMES" cancel "$id" >/dev/null 2>&1 || true
-        done < <(perl -MJSON::PP -e '
-            use strict;
-            use warnings;
-            local $/;
-            my $jobs = decode_json(<>);
-            for my $job (@$jobs) {
-                print "$job->{job_id}\n"
-                    if ($job->{status} // "") eq "QUEUED" ||
-                       ($job->{status} // "") eq "RUNNING";
-            }
-        ' "$DATA" 2>/dev/null || true)
-    fi
-
-    scheduler_pid="$(find_scheduler_pid)"
-    if [[ -n "$scheduler_pid" ]]; then
-        kill "$scheduler_pid" 2>/dev/null || true
-        sleep 0.1
-    fi
     rm -rf "$TEST_HOME"
-    printf '```\n'
 }
 trap cleanup EXIT
 
-if [[ ! -x "$HERMES" ]]; then
-    echo "FAIL: no existe el ejecutable $HERMES. Compila Hermes antes de ejecutar la prueba."
+# Paso 1: Compilar
+make clean && make > /dev/null
+echo "[INFO] Compilación limpia OK."
+
+HERMES_BIN="./hermes"
+if [ ! -x "${HERMES_BIN}" ]; then
+    echo "[FAIL] No se encontró binario ejecutable 'hermes'."
     exit 1
 fi
 
-export HOME="$TEST_HOME"
+# Encolar job de larga duración
+echo "[INFO] Encolando job de larga duración: sleep 60"
+"${HERMES_BIN}" job sleep 60 > /tmp/send_job.log 2>&1
+cat /tmp/send_job.log
 
-declare -a PROCESS_IDS=()
-for index in $(seq 1 8); do
-    "$HERMES" job --request-id rf27-concurrent sleep 30 \
-        >"$OUTPUT_DIR/request-$index.txt" 2>&1 &
-    PROCESS_IDS+=("$!")
+sleep 2
+
+# Obtener Job ID de forma robusta
+JOB_ID="$(python3 - "$JOBS_FILE" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], 'r') as f:
+        data = json.load(f)
+    if isinstance(data, list) and data:
+        print(data[-1].get('job_id', ''))
+    else:
+        print('')
+except Exception:
+    print('')
+PYEOF
+)"
+
+if [ -z "${JOB_ID}" ]; then
+    echo "[FAIL] No se pudo obtener Job ID."
+    exit 1
+fi
+
+echo "[INFO] Job ID obtenido: ${JOB_ID}"
+sleep 1
+
+echo "[INFO] Estado previo a cancelaciones concurrentes:"
+"${HERMES_BIN}" filter id "${JOB_ID}" 2>&1 || true
+
+# 5 cancelaciones concurrentes
+echo "[INFO] Lanzando 5 CANCELACIONES CONCURRENTES sobre Job ${JOB_ID}..."
+for i in {1..5}; do
+    "${HERMES_BIN}" cancel "${JOB_ID}" > "$REPO/verif/results/cancel_client_${i}.log" 2>&1 &
+    PIDS[$i]=$!
 done
 
-for pid in "${PROCESS_IDS[@]}"; do
+echo "[INFO] Esperando finalización de todas las cancelaciones..."
+for pid in "${PIDS[@]}"; do
     wait "$pid"
 done
+echo "[INFO] Todas las cancelaciones finalizadas."
+sleep 3
 
-mapfile -t JOB_IDS < <(
-    sed -n 's/^job ID: *//p' "$OUTPUT_DIR"/request-*.txt | sort -u
-)
-
-if [[ "${#JOB_IDS[@]}" -ne 1 ]]; then
-    echo "FAIL: solicitudes simultaneas con la misma clave crearon Jobs diferentes."
-    exit 1
-fi
-
-KEYED_COUNT="$(perl -MJSON::PP -e '
-    use strict;
-    use warnings;
-    my $path = shift;
-    open my $file, "<", $path or die "No se pudo abrir $path: $!";
-    local $/;
-    my $jobs = decode_json(<$file>);
-    print scalar grep {
-        ($_->{request_id} // "") eq "rf27-concurrent"
-    } @$jobs;
-' "$DATA")"
-
-if [[ "$KEYED_COUNT" -ne 1 ]]; then
-    echo "FAIL: jobs.json debe contener exactamente un registro para la clave."
-    exit 1
-fi
-
-if "$HERMES" job --request-id rf27-concurrent sleep 31 \
-    >"$OUTPUT_DIR/conflict.txt" 2>&1; then
-    echo "FAIL: la misma clave no debe aceptar un payload diferente."
-    exit 1
-fi
-
-if ! grep -q "otro programa o argumentos" "$OUTPUT_DIR/conflict.txt"; then
-    echo "FAIL: el conflicto no produjo un mensaje explicito."
-    cat "$OUTPUT_DIR/conflict.txt"
-    exit 1
-fi
-
-JOB_COUNT="$(perl -MJSON::PP -e 'local $/; print scalar @{decode_json(<>)}' "$DATA")"
-if [[ "$JOB_COUNT" -ne 1 ]]; then
-    echo "FAIL: el payload incompatible modifico jobs.json."
-    exit 1
-fi
-
-"$HERMES" job sleep 30 >"$OUTPUT_DIR/unkeyed.txt" 2>&1
-UNKEYED_ID="$(sed -n 's/^job ID: *//p' "$OUTPUT_DIR/unkeyed.txt")"
-if [[ -z "$UNKEYED_ID" || "$UNKEYED_ID" == "${JOB_IDS[0]}" ]]; then
-    echo "FAIL: las solicitudes sin clave deben conservar la semantica no idempotente."
-    exit 1
-fi
-
-"$HERMES" cancel "${JOB_IDS[0]}" >/dev/null
-"$HERMES" cancel "$UNKEYED_ID" >/dev/null
-
-"$HERMES" job --request-id rf27-terminal true \
-    >"$OUTPUT_DIR/terminal.txt" 2>&1
-TERMINAL_ID="$(sed -n 's/^job ID: *//p' "$OUTPUT_DIR/terminal.txt")"
-
-TERMINAL_STATUS=""
-for _ in $(seq 1 50); do
-    TERMINAL_STATUS="$(read_job_value "$TERMINAL_ID" status)"
-    [[ "$TERMINAL_STATUS" == "SUCCEEDED" ]] && break
-    sleep 0.1
+# Validar respuestas de los clientes
+echo "[INFO] Validando respuestas de los clientes..."
+for i in {1..5}; do
+    if grep -q -E "(Cancelación solicitada|ya ha sido cancelado|ya se encuentra|no encontrado|estado: CANCELED)" "$REPO/verif/results/cancel_client_${i}.log"; then
+        echo "  - Cliente $i: Respuesta coherente recibida."
+    else
+        echo "[FAIL] El Cliente $i no recibió una respuesta coherente."
+        cat "$REPO/verif/results/cancel_client_${i}.log"
+        exit 1
+    fi
 done
 
-if [[ "$TERMINAL_STATUS" != "SUCCEEDED" ]]; then
-    echo "FAIL: el Job de comprobacion no alcanzo SUCCEEDED."
+echo "[INFO] Consultando estado final:"
+"${HERMES_BIN}" filter id "${JOB_ID}" 2>&1
+
+# Validación JSON final
+echo "[INFO] Validando integridad y coherencia..."
+python3 - "$JOBS_FILE" "$JOB_ID" <<'PYEOF'
+import json, sys
+
+jobs_path = sys.argv[1]
+job_id = sys.argv[2]
+
+try:
+    with open(jobs_path, 'r') as f:
+        data = json.load(f)
+    print("[VALID] jobs.json es JSON válido")
+except Exception as e:
+    print(f"[FAIL] jobs.json NO es JSON válido: {e}")
+    sys.exit(1)
+
+target = None
+for j in data:
+    if str(j.get('job_id')) == str(job_id):
+        target = j
+        break
+
+if target is None:
+    print(f"[FAIL] No se encontró el Job con ID {job_id}")
+    sys.exit(1)
+
+status = target.get('status')
+cancel_req = target.get('cancel_requested')
+
+if status == 'CANCELED':
+    if cancel_req is True:
+        print("[OK] cancel_requested=True")
+    print("[PASS-VALIDATION] Coherencia, serialización e integridad OK")
+    sys.exit(0)
+else:
+    print(f"[FAIL] Estado inválido: {status}")
+    sys.exit(1)
+PYEOF
+
+VAL_RC=$?
+if [ ${VAL_RC} -ne 0 ]; then
+    echo "[FAIL] TC-017 - Validación fallida (código ${VAL_RC})"
     exit 1
 fi
 
-BEFORE_TERMINAL="$(read_job_value "$TERMINAL_ID" status) $(read_job_value "$TERMINAL_ID" tiempo_terminacion)"
-"$HERMES" job --request-id rf27-terminal true \
-    >"$OUTPUT_DIR/terminal-retry.txt" 2>&1
-RETRIED_TERMINAL_ID="$(
-    sed -n 's/^job ID: *//p' "$OUTPUT_DIR/terminal-retry.txt"
-)"
-AFTER_TERMINAL="$(read_job_value "$TERMINAL_ID" status) $(read_job_value "$TERMINAL_ID" tiempo_terminacion)"
-
-if [[ "$RETRIED_TERMINAL_ID" != "$TERMINAL_ID" ||
-      "$AFTER_TERMINAL" != "$BEFORE_TERMINAL" ]]; then
-    echo "FAIL: el reintento no preservo el Job terminal existente."
-    exit 1
-fi
-
-SCHEDULER_PID="$(find_scheduler_pid)"
-if [[ -z "$SCHEDULER_PID" ]]; then
-    echo "FAIL: no se encontro el scheduler de prueba."
-    exit 1
-fi
-
-echo "PASS: claves repetidas son atomicas, reutilizan el Job y rechazan payloads distintos."
+echo "[PASS] TC-017"
+exit 0
