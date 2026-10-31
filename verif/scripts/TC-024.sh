@@ -109,10 +109,8 @@ if ! perl -MJSON::PP -e '
     exit 1
 fi
 
-"$HERMES" configmax 2
-
 declare -a PROCESS_IDS=()
-for index in 1 2; do
+for index in 1 2 3; do
     "$HERMES" job sleep 10 >"$OUTPUT_DIR/job-$index.txt" 2>&1 &
     PROCESS_IDS+=("$!")
 done
@@ -123,8 +121,8 @@ done
 mapfile -t JOB_IDS < <(
     sed -n 's/^job ID: *//p' "$OUTPUT_DIR"/job-*.txt | sort -u
 )
-if [[ "${#JOB_IDS[@]}" -ne 2 ]]; then
-    echo "FAIL: no se aceptaron los dos Jobs configurados."
+if [[ "${#JOB_IDS[@]}" -ne 3 ]]; then
+    echo "FAIL: no se aceptaron los tres Jobs configurados."
     cat "$OUTPUT_DIR"/job-*.txt
     exit 1
 fi
@@ -138,17 +136,17 @@ for _ in $(seq 1 30); do
         my $jobs = decode_json(<>);
         print scalar grep { ($_->{status} // "") eq "RUNNING" } @$jobs;
     ' "$DATA")"
-    [[ "$RUNNING" -eq 2 ]] && break
+    [[ "$RUNNING" -eq 3 ]] && break
     sleep 0.1
 done
 
-if [[ "$RUNNING" -ne 2 ]]; then
-    echo "FAIL: se esperaba observar dos Jobs en ejecución con la configuración en 2."
+if [[ "$RUNNING" -ne 3 ]]; then
+    echo "FAIL: se esperaba observar tres Jobs en ejecución con la configuración en 3."
     exit 1
 fi
 
 if "$HERMES" job true >"$OUTPUT_DIR/over-capacity.txt" 2>&1; then
-    echo "FAIL: el sistema aceptó un Job que superaría el máximo configurado."
+    echo "FAIL: el sistema aceptó un cuarto Job que superaría el máximo configurado."
     exit 1
 fi
 if ! grep -q 'La cola está llena' "$OUTPUT_DIR/over-capacity.txt"; then
@@ -157,4 +155,4 @@ if ! grep -q 'La cola está llena' "$OUTPUT_DIR/over-capacity.txt"; then
     exit 1
 fi
 
-echo "PASS: configmax persistió el valor, conservó otras claves, rechazó valores inválidos y el scheduler ejecutó como máximo dos Jobs simultáneos."
+echo "PASS: configmax persistió el valor, conservó otras claves, rechazó valores inválidos y el scheduler ejecutó tres Jobs simultáneos sin superar el límite."
