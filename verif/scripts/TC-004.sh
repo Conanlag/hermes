@@ -20,6 +20,8 @@ TEST_HOME="$(mktemp -d)"
 export HOME="$TEST_HOME"
 DATA="$HOME/.local/share/hermes/data/jobs.json"
 LOCK="$HOME/.local/share/hermes/data/scheduler.lock"
+OUTPUT_DIR="$TEST_HOME/output"
+mkdir -p "$OUTPUT_DIR"
 
 find_scheduler_pid() {
     local descriptor target process_path
@@ -55,15 +57,19 @@ rm -f "$DATA"
 make clean && make > /dev/null
 echo "Paso 1 OK (compilación limpia)"
 
+# Configurar la admisión antes del primer Job para que el límite temporal
+# permita conservar los 100 Jobs usados en la medición de RNF-05.
+./hermes configmax 64
+
 # Crear datos de prueba usando redirección para evitar SIGPIPE
-./hermes job true > /tmp/h_a.txt
-A=$(grep -oP 'job ID: \K[0-9]+' /tmp/h_a.txt)
+./hermes job true > "$OUTPUT_DIR/h_a.txt"
+A=$(grep -oP 'job ID: \K[0-9]+' "$OUTPUT_DIR/h_a.txt")
 sleep 1
-./hermes job false > /tmp/h_b.txt
-B=$(grep -oP 'job ID: \K[0-9]+' /tmp/h_b.txt)
+./hermes job false > "$OUTPUT_DIR/h_b.txt"
+B=$(grep -oP 'job ID: \K[0-9]+' "$OUTPUT_DIR/h_b.txt")
 sleep 1
-./hermes job sleep 30 > /tmp/h_c.txt
-C=$(grep -oP 'job ID: \K[0-9]+' /tmp/h_c.txt)
+./hermes job sleep 30 > "$OUTPUT_DIR/h_c.txt"
+C=$(grep -oP 'job ID: \K[0-9]+' "$OUTPUT_DIR/h_c.txt")
 sleep 1
 ./hermes cancel "$C" > /dev/null
 sleep 1
@@ -115,6 +121,52 @@ else
     echo "Paso 6 FAIL (Salida real: '$SALIDA_VACIA')"
     exit 1
 fi
+
+# Paso 7: Rendimiento de consulta con 100 Jobs persistidos
+for i in {1..100}; do
+    JOB_OUTPUT="$OUTPUT_DIR/echo-$i.txt"
+    if ! ./hermes job echo hola > "$JOB_OUTPUT" 2>&1; then
+        echo "Paso 7 FAIL (no se pudo crear el Job echo $i)"
+        cat "$JOB_OUTPUT"
+        exit 1
+    fi
+
+    JOB_ID="$(sed -n 's/^job ID: *//p' "$JOB_OUTPUT" | head -n 1)"
+    if [[ ! "$JOB_ID" =~ ^[0-9]+$ ]]; then
+        echo "Paso 7 FAIL (ID inválido para el Job echo $i)"
+        cat "$JOB_OUTPUT"
+        exit 1
+    fi
+
+    JOB_STATUS=""
+    for _ in $(seq 1 50); do
+        JOB_STATUS="$(./hermes filter id "$JOB_ID" 2>/dev/null | sed -n 's/^Estado: //p' | head -n 1)"
+        [[ "$JOB_STATUS" == "SUCCEEDED" ]] && break
+        sleep 0.1
+    done
+    if [[ "$JOB_STATUS" != "SUCCEEDED" ]]; then
+        echo "Paso 7 FAIL (Job echo $JOB_ID no terminó correctamente; estado: '$JOB_STATUS')"
+        exit 1
+    fi
+done
+
+TIMEFORMAT='%R'
+{ time ./hermes filter programa echo > "$OUTPUT_DIR/filter-echo.txt"; } \
+    2>"$OUTPUT_DIR/filter-echo.time"
+FILTER_SECONDS="$(tail -n 1 "$OUTPUT_DIR/filter-echo.time")"
+MATCHES="$(grep -c '^Job ID:' "$OUTPUT_DIR/filter-echo.txt" || true)"
+echo "Consulta de programa echo: ${MATCHES} Jobs en ${FILTER_SECONDS} segundos"
+
+if [[ "$MATCHES" -lt 100 ]]; then
+    echo "Paso 7 FAIL (se esperaban al menos 100 Jobs echo; se encontraron $MATCHES)"
+    exit 1
+fi
+
+if ! awk -v elapsed="$FILTER_SECONDS" 'BEGIN { exit !(elapsed < 1.0) }'; then
+    echo "Paso 7 FAIL (la consulta tardó ${FILTER_SECONDS}s; el límite es menor que 1.0s)"
+    exit 1
+fi
+echo "Paso 7 OK (RNF-05: consulta de 100 Jobs en menos de 1.0s)"
 
 # Veredicto final
 echo "[PASS] TC-004"

@@ -10,7 +10,7 @@
 #   (c) fila RUNNING con el PID vivo de un proceso ajeno -> no se mata.
 #   (d) QUEUED sigue pendiente y se ejecuta.
 #   (e) estados terminales intactos y estado desconocido fail-closed.
-#   (f) SIGKILL en plena ráfaga de escrituras -> jobs.json sigue parseando,
+#   (f) RNF-28: SIGKILL en plena ráfaga de escrituras -> jobs.json sigue parseando,
 #       jobs.json.bak existe, y el arranque limpia los jobs.json.tmp.*
 #       huérfanos (RNF-11).
 #   (g) clean data tras una caída -> recupera antes de borrar y no arranca
@@ -618,7 +618,7 @@ else
 fi
 
 echo
-echo "== (f) SIGKILL en plena ráfaga de escrituras: jobs.json parsea y no quedan temporales =="
+echo "== (f) RNF-28: SIGKILL durante escrituras; jobs.json se conserva o recupera =="
 if ! detener_demonio; then
     fallo "(f) no se pudo detener el demonio antes de la ráfaga."
 else

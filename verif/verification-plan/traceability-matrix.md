@@ -7,7 +7,7 @@
 | RF-02    | Validacion de solicitudes con mensaje util | Alta        | Prueba  | TC-001    | verif/scripts/TC-001.sh + verif/results/tc001.log ([PASS]) | PASS        | -                   |
 | RF-03    | Cola inicial cuando no hay capacidad inmediata | Alta        | Prueba  | TC-002    | verif/scripts/TC-002.sh + verif/results/tc002.log ([FAIL]) | FAIL | -                   |
 | RF-04    |                     |             |          |           |             | Pendiente   |                     |
-| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-024 | verif/scripts/TC-024.sh ([PASS]) | PASS | - |
+| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-025 | verif/scripts/TC-025.sh; verif/results/results.md ([PASS], 2026-10-30) | PASS | - |
 | RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED | CrÃ­tica     | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([PASS]) | PASS        | -                   |
 | RF-07    | Tiempos de recepcion, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
 | RF-08    | Consulta de un trabajo mediante ID | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
@@ -35,7 +35,7 @@
 | RNF-02   | Construccion reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-04   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-05   | Consulta de estado en menos de 1 s con 100 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; evidencia acumulada en verif/results/results_TC-018.md | PASS | - |
+| RNF-05   | Consulta de programa en menos de 1 s con al menos 100 Jobs | Alta | Prueba | TC-004 | verif/scripts/TC-004.sh; verif/results/tc004.log (100 Jobs en 0.013 s, [PASS]) | PASS | - |
 | RNF-06   | Conservación de metadatos para al menos 500 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; fixture de 519 registros validado | PASS | - |
 | RNF-07   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-08   | Solicitud invalida no termina el servicio (local; desconexion en Fase 2) | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
