@@ -30,7 +30,7 @@ src/hermes/
 │   ├── timestamp.h
 │   └── nlohmann/json.hpp
 └── src/
-    ├── event_log.cpp
+    ├── events/event_log.cpp
     ├── main.cpp
     ├── cancel/cancel.cpp
     ├── job/job.cpp
