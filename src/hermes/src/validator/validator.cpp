@@ -23,7 +23,7 @@ ResultadoValidacion validarComando(const string& comando) {
             false,
             CodigoValidacion::VACIO,
             "Comando vacio. Comandos validos: "
-                "job, filter, cancel, clean, configmax, --version, --help"
+                "job, filter, cancel, clean, configmax, logs, --version, --help"
         };
     }
 
@@ -33,6 +33,7 @@ ResultadoValidacion validarComando(const string& comando) {
         comando == "cancel" ||
         comando == "clean" ||
         comando == "configmax" ||
+        comando == "logs" ||
         comando == "--version" ||
         comando == "--help"
     ) {
@@ -55,7 +56,7 @@ ResultadoValidacion validarComando(const string& comando) {
         "Comando no reconocido: " +
         comando +
         ". Comandos validos: "
-        "job, filter, cancel, clean, configmax, --version, --help"
+        "job, filter, cancel, clean, configmax, logs, --version, --help"
     };
 }
 

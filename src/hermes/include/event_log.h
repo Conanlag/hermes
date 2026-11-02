@@ -27,6 +27,8 @@ public:
                                  const std::string &message,
                                  const nlohmann::json &extra = nlohmann::json::object());
 
+    static bool watch_logs();
+
     static std::string level_to_string(EventLevel level);
 };
 

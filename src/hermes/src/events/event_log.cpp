@@ -1,8 +1,12 @@
 #include "event_log.h"
 
+#include <chrono>
+#include <csignal>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
@@ -13,6 +17,81 @@
 #include "timestamp.h"
 
 namespace hermes {
+
+namespace {
+
+volatile std::sig_atomic_t detenerWatcherLogs = 0;
+
+void manejarInterrupcionLogs(int) {
+    detenerWatcherLogs = 1;
+}
+
+std::string campoEvento(const nlohmann::json &evento,
+                        const std::string &campo,
+                        const std::string &valorPredeterminado) {
+    if (!evento.contains(campo)) {
+        return valorPredeterminado;
+    }
+
+    const nlohmann::json &valor = evento.at(campo);
+    if (valor.is_null()) {
+        return "null";
+    }
+    if (valor.is_string()) {
+        return valor.get<std::string>();
+    }
+    return valor.dump();
+}
+
+std::string limpiarCampo(const std::string &valor) {
+    std::string resultado;
+    resultado.reserve(valor.size());
+
+    for (char caracter : valor) {
+        if (caracter == '|') {
+            resultado += "\\|";
+        } else if (caracter == '\n') {
+            resultado += "\\n";
+        } else if (caracter == '\r') {
+            resultado += "\\r";
+        } else {
+            resultado += caracter;
+        }
+    }
+
+    return resultado;
+}
+
+bool imprimirEvento(const std::string &linea, std::size_t numeroLinea) {
+    nlohmann::json evento;
+    try {
+        evento = nlohmann::json::parse(linea);
+    } catch (const std::exception &e) {
+        std::cerr << "logs: JSON invalido en la linea "
+                  << numeroLinea << ": " << e.what() << std::endl;
+        return false;
+    }
+
+    if (!evento.is_object()) {
+        std::cerr << "logs: la linea " << numeroLinea
+                  << " no contiene un objeto JSON" << std::endl;
+        return false;
+    }
+
+    std::cout << "| hermes | ("
+              << limpiarCampo(campoEvento(evento, "ts", "-")) << ") "
+              << "[" << limpiarCampo(campoEvento(evento, "level", "-")) << "] "
+              << "[job_id="
+              << limpiarCampo(campoEvento(evento, "job_id", "-")) << "] "
+              << limpiarCampo(campoEvento(evento, "message", "-"));
+    if (evento.contains("context")) {
+        std::cout << " " << limpiarCampo(evento.at("context").dump());
+    }
+    std::cout << std::endl;
+    return true;
+}
+
+} // namespace
 
 std::string EventLog::level_to_string(EventLevel level) {
     switch (level) {
@@ -27,6 +106,80 @@ std::string EventLog::level_to_string(EventLevel level) {
         default:
             return "INFO";
     }
+}
+
+bool EventLog::watch_logs() {
+    std::string ruta;
+    try {
+        ruta = rutaEventsLog();
+    } catch (const std::exception &e) {
+        std::cerr << "logs: no se pudo localizar la bitácora: "
+                  << e.what() << std::endl;
+        return false;
+    }
+
+    std::ifstream archivo(ruta);
+    if (!archivo) {
+        std::cerr << "logs: no se pudo abrir la bitácora: "
+                  << ruta << std::endl;
+        return false;
+    }
+
+    archivo.seekg(0, std::ios::end);
+    if (!archivo) {
+        std::cerr << "logs: no se pudo posicionar en la bitácora: "
+                  << ruta << std::endl;
+        return false;
+    }
+
+    std::cout << "| hermes | observando logs nuevos (Ctrl+C para salir)"
+              << std::endl;
+    detenerWatcherLogs = 0;
+    const auto manejadorAnterior =
+        std::signal(SIGINT, manejarInterrupcionLogs);
+    if (manejadorAnterior == SIG_ERR) {
+        std::cerr << "logs: no se pudo instalar el manejador de Ctrl+C"
+                  << std::endl;
+        return false;
+    }
+
+    std::string linea;
+    std::string lineaPendiente;
+    std::size_t numeroLinea = 0;
+    bool exito = true;
+    while (!detenerWatcherLogs) {
+        archivo.clear();
+        while (std::getline(archivo, linea)) {
+            if (archivo.eof()) {
+                lineaPendiente += linea;
+                break;
+            }
+
+            ++numeroLinea;
+            lineaPendiente += linea;
+            if (!lineaPendiente.empty() &&
+                !imprimirEvento(lineaPendiente, numeroLinea)) {
+                exito = false;
+                break;
+            }
+            lineaPendiente.clear();
+        }
+
+        if (!exito || archivo.bad()) {
+            if (exito) {
+                std::cerr << "logs: error al leer la bitacora: "
+                          << ruta << std::endl;
+            }
+            exito = false;
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    std::signal(SIGINT, manejadorAnterior);
+    std::cout << std::endl;
+    return exito;
 }
 
 static bool escribirLineaJsonl(const std::string &ruta, const nlohmann::json &entrada) {

@@ -46,6 +46,15 @@ int main(int argc, char* argv[]) {
     if (comando == "--help") {
         return mostrarAyuda();
     }
+    if (comando == "logs") {
+        if (argc != 2) {
+            error("Uso: hermes logs");
+            return 1;
+        }
+
+        return hermes::EventLog::watch_logs() ? 0 : 1;
+    }
+
     if (comando == "clean") {
         const string objetivo = argc == 3 ? argv[2] : "";
         const ResultadoValidacion validacionClean =

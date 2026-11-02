@@ -14,7 +14,7 @@ La bitácora se almacena en formato **JSON Lines (JSONL)**: cada línea represen
 
 **Consideraciones actuales:**
 
-- **Lo que hace:** Registra `Job recibido`, `Transición a RUNNING` (con PID del proceso hijo), `Transición a SUCCEEDED`/`Transición a FAILED` (con `exit_code`/`signal_number` cuando aplica), `Cancelación solicitada` (desde CLI), `Cancelación exitosa` (ejecutada por el daemon), `Petición inválida` (cancelación sobre trabajos ya finalizados), `Rechazo de Validación` (comandos/parámetros inválidos) y `Solicitud rechazada: cola llena` (capacidad de trabajos activos excedida, RF-23/RF-25). También registra `Error interno del daemon` con `errno`/detalle en fallos críticos.
+- **Lo que hace:** Registra `Job recibido`, `Transición a RUNNING` (con PID del proceso hijo), `Transición a SUCCEEDED`/`Transición a FAILED` (con `exit_code`/`signal_number` cuando aplica), `Cancelación solicitada` (desde CLI), `Cancelación exitosa` (ejecutada por el daemon), `Petición inválida` (cancelación sobre trabajos ya finalizados), `Rechazo de Validación` (comandos/parámetros inválidos) y `Solicitud rechazada: cola llena` (capacidad de trabajos activos excedida, RF-23/RF-25). También registra `Error interno del daemon` con `errno`/detalle en fallos críticos. El comando `hermes logs` sigue en terminal los eventos nuevos de `events.jsonl` sin iniciar el scheduler.
 - **Lo que NO hace:** No genera una bitácora global de todo el sistema ajena al ciclo de vida de trabajos. No reemplaza `stderr` ni los mensajes del CLI. No implementa rotación/compresión, búsqueda, filtrado ni purga del archivo. No registra todos los errores menores del código base (solo los puntos críticos acordados). No persiste históricos complejos fuera del formato JSONL *append-only*.
 
 ---
@@ -40,12 +40,12 @@ src/hermes/
 
 | Archivo / directorio | Responsabilidad |
 |---|---|
-| `include/event_log.h` | Declaración del enumerado `EventLevel` (`DEBUG`, `INFO`, `WARN`, `ERROR`) y de la clase `EventLog` con `log_event` (para trabajos con `job_id` explícito) y `log_event_system` (para eventos pre-creación/globales con `job_id: null`). |
-| `src/event_log.cpp` | Implementación del logger. Genera la entrada JSON con `ts`, `job_id`, `level`, `message` y `context` opcional. Realiza escritura directa con descriptores POSIX (`open/write`), protegida con `flock(LOCK_EX)`, escritura atómica por línea y `fsync`. |
+| `include/event_log.h` | Declaración del enumerado `EventLevel` (`DEBUG`, `INFO`, `WARN`, `ERROR`) y de la clase `EventLog` con `log_event` (para trabajos con `job_id` explícito), `log_event_system` (para eventos pre-creación/globales con `job_id: null`) y `watch_logs` (para seguir nuevos eventos en terminal). |
+| `src/events/event_log.cpp` | Implementación del logger. Genera la entrada JSON con `ts`, `job_id`, `level`, `message` y `context` opcional. Realiza escritura directa con descriptores POSIX (`open/write`), protegida con `flock(LOCK_EX)`, escritura atómica por línea y `fsync`. También lee `events.jsonl` línea por línea para el comando `hermes logs`. |
 | `include/data_paths.h` | Añade inicialización de `events.jsonl` vacío junto a `jobs.json`, `config.json` y `jobs.lock`. Provee `rutaEventsLog()` reutilizando `rutaDatos()`. |
 | `src/job/job.cpp` | Registra `"Job recibido"` al crear el trabajo. Mantiene integración con los eventos del ciclo de vida cuando aplica. |
 | `src/scheduler/scheduler.cpp` | Núcleo del ciclo de vida. Registra `"Transición a RUNNING"` con PID, `"Transición a SUCCEEDED/FAILED/Cancelación exitosa"`, `"Error interno del daemon"` con `errno`/detalle y fallos de `fork/open`. |
-| `src/main.cpp` | Punto de entrada CLI. Registra `"Cancelación solicitada"` **antes** de llamar a `cancelarJobDetallado()` (con `origen: "CLI"`, `accion: "SOLICITUD"`). Registra `"Petición inválida"` en casos `NO_EXISTE`/`NO_CANCELABLE`. |
+| `src/main.cpp` | Punto de entrada CLI. Registra `"Cancelación solicitada"` **antes** de llamar a `cancelarJobDetallado()` (con `origen: "CLI"`, `accion: "SOLICITUD"`). Registra `"Petición inválida"` en casos `NO_EXISTE`/`NO_CANCELABLE` y expone `hermes logs`. |
 | `src/cancel/cancel.cpp` | Lógica de cancelación. Ya no duplica el log de solicitud, delegando ese registro al CLI para garantizar el orden correcto. |
 | `src/validator/validator.cpp` | Registra `"Rechazo de Validación"` con `comando_intentado`, `motivo_del_rechazo` y el valor inválido para comandos, programa, `request-id`, filtros, IDs y status. |
 | `include/timestamp.h` | Reutilizado para generar la marca temporal con `obtenerFechaHoraActual()`. |
@@ -240,3 +240,14 @@ cat ~/.local/share/hermes/data/events.jsonl
 ```
 
 **Nota:** Todas las líneas son objetos JSON independientes (JSONL), válidas al validar con `python3`. El archivo se encuentra en `~/.local/share/hermes/data/events.jsonl`, mismo directorio que `jobs.json`. Cada entrada contiene obligatoriamente `ts`, `job_id`, `level` y `message`.
+
+### Seguimiento de eventos desde la terminal
+
+`hermes logs` funciona como un watcher: al invocarlo, se posiciona al final de `events.jsonl` y espera eventos nuevos. No imprime el historial existente ni inicia el scheduler, y tampoco modifica la bitácora. Cada evento nuevo se presenta con el prefijo `| hermes |`, seguido de fecha, nivel, Job ID, mensaje y contexto cuando exista. Una línea JSON inválida o un error de lectura se informa y termina con un código de salida distinto de cero. Para detener el seguimiento y recuperar la terminal, presiona `Ctrl+C`.
+
+```text
+| hermes | observando logs nuevos (Ctrl+C para salir)
+| hermes | (2026-10-25 18:39:34) [INFO] [job_id=8] Job recibido {"argumentos":["20"],"programa":"sleep"}
+```
+
+El comando no acepta argumentos adicionales; su uso es `hermes logs`.
