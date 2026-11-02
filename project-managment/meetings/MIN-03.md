@@ -1,4 +1,4 @@
-# Minuta 08 — Revisión técnica del proyecto
+# Minuta 03 — Revisión técnica del proyecto
 
 **Proyecto:** Hermes
 **Tema:** Revisión de arquitectura, implementación y documentación

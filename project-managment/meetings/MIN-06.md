@@ -1,0 +1,1 @@
+# Minuta 04 - Organizacion de TC para el avance 02
