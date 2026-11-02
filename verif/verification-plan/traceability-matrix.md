@@ -60,7 +60,7 @@
 | RNF-25   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-26   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-29 | Aplicación de backpressure y protección del sistema al alcanzar los límites de encolamiento. | Alta | Prueba | TC-016 | verif/scripts/TC-016.sh + verif/results/tc016.log ([PASS]) | Pass | - |
-| RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-020 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
+| RNF-33   | Liberación de memoria, procesos, archivos y sockets después de estrés | Alta | Prueba de estrés | TC-024 | verif/scripts/TC-020.sh + verif/results/results_TC-020.md | Parcial | No hay uso de sockets implementado; falta validar su ciclo de vida. |
 | RNF-27   | Transiciones de estado consistentes ante solicitudes concurrentes | Crítica | Prueba | TC-017 | verif/scripts/TC-017.sh + verif/results/tc017.log ([PASS]) | PASS | - |
 | RNF-30   | Sin huérfanos: terminación de grupo, PDEATHSIG y cierre ordenado | Alta | Prueba | TC-020 | verif/scripts/TC-020.sh + verif/results/tc020.log; casos| PASS | - |
 | RNF-31   | Clasificación explícita y fail-closed: INTERRUPTED con motivo | Alta | Prueba | TC-022, TC-016 | verif/scripts/TC-022.sh; casos (d), (e), (i); TC-016 | PASS | - |
