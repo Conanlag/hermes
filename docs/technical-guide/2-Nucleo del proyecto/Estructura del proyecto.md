@@ -10,11 +10,14 @@ hermes/
 │   │   └── json.hpp
 │   ├── cancel.h
 │   ├── clean.h
+│   ├── config.h
 │   ├── data_paths.h
+│   ├── event_log.h
 │   ├── filter.h
 │   ├── help.h
 │   ├── job.h
 │   ├── process.h
+│   ├── recovery.h
 │   ├── scheduler.h
 │   ├── status.h
 │   ├── storage.h
@@ -26,6 +29,11 @@ hermes/
 ├── src/
 │   ├── cancel/
 │   │   └── cancel.cpp
+│   ├── config/
+│   │   ├── config.cpp
+│   │   └── config_update.cpp
+│   ├── events/
+|   |   └──event_log.cpp
 │   ├── clean/
 │   │   └── clean.cpp
 │   ├── filter/
@@ -35,6 +43,8 @@ hermes/
 │   ├── job/
 │   │   └── job.cpp
 │   ├── network/
+│   ├── recovery/
+│   │   └── recovery.cpp
 │   ├── process/
 │   │   └── process.cpp
 │   ├── scheduler/
@@ -67,8 +77,11 @@ Cada directorio tendrá una responsabilidad específica:
 - ```src/help/```: contendrá la implementación del comando de ayuda (texto de uso).
 - ```src/validator/```: contendrá la validación de entradas del usuario y los códigos de error asociados.
 - ```src/process/```: contendrá la gestión de procesos hijos (espera, terminación y escalado de cancelación).
+- ```src/recovery/```: contendrá la lógica de recuperación ante fallos e interrupciones del sistema, permitiendo verificar la capacidad de arranque y reclasificar de forma segura los trabajos huérfanos
 - ```src/cancel/```: contendrá la lógica del comando de cancelación de jobs.
 - ```src/clean/```: contendrá la lógica del comando de limpieza del historial persistente.
+- ```src/config/```: contendrá la lógica de lectura, validación y persistencia de la configuración del sistema (como el número máximo de trabajos permitidos y la tolerancia a fallos ante archivos corruptos o ausentes).
+- ```src/events/```: encargado del sistema centralizado de bitácoras y eventos estructurados, permitiendo registrar mensajes con diferentes niveles de severidad (DEBUG, INFO, WARN, ERROR), asociarlos a un trabajo específico o a nivel de sistema, y gestionar flujos de monitoreo.
 - ```src/scheduler/```: contendrá el scheduler en segundo plano que lanza los jobs pendientes.
 - ```src/storage/```: contendrá el acceso serializado al almacenamiento JSON (lectura/escritura con bloqueo).
 - ```src/network/```: contendrá los componentes relacionados con la comunicación entre computadoras dentro de una red.
