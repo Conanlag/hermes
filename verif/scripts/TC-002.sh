@@ -1,12 +1,13 @@
 #!/bin/bash
-# TC-002: Validar estructura de cola inicial (RF-03)
+# TC-002: Integración bajo estrés del límite de concurrencia y la cola
+# Requisitos: RF-03, RF-05, RNF-04, RNF-07
 # Uso (WSL): bash verif/scripts/TC-002.sh   (desde la raíz del repo)
 # Evidencia: verif/results/tc002.log
 
 echo "=== Ejecutando TC-002 ==="
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$REPO/src/hermes" || { echo "[FAIL] TC-002 (no se pudo entrar a src/hermes)"; exit 1; }
+cd "$REPO/src/hermes" || { echo "[ FAIL ] TC-002 (no se pudo entrar a src/hermes)"; exit 1; }
 
 mkdir -p "$REPO/verif/results"
 LOG="$REPO/verif/results/tc002.log"
@@ -20,13 +21,11 @@ DATA="$DATA_DIR/jobs.json"
 CONFIG_FILE="$DATA_DIR/config.json"
 LOCK="$DATA_DIR/scheduler.lock"
 
-# Configurar límite amplio
-mkdir -p "$DATA_DIR"
-cat <<EOF > "$CONFIG_FILE"
-{
-  "trabajos_maximos": 10
-}
-EOF
+# Límite de concurrencia (workers) y cupos de espera (QUEUED).
+LIMITE=3
+COLA=1
+SOLICITUDES=$((LIMITE + COLA))
+DURACION=10
 
 find_scheduler_pid() {
     local descriptor target process_path
@@ -47,10 +46,11 @@ cleanup() {
     scheduler_pid="$(find_scheduler_pid)"
     if [[ -n "$scheduler_pid" ]]; then
         kill "$scheduler_pid" 2>/dev/null || true
-        for _ in $(seq 1 20); do
+        for _ in $(seq 1 30); do
             kill -0 "$scheduler_pid" 2>/dev/null || break
             sleep 0.1
         done
+        kill -9 "$scheduler_pid" 2>/dev/null || true
     fi
     rm -rf "$TEST_HOME"
 }
@@ -58,169 +58,228 @@ trap cleanup EXIT
 
 FALLOS=0
 
-# Paso 1: Compilar
+fallar() {
+    echo "[ FAIL ] $1"
+    FALLOS=1
+}
+
+# Resumen del historial: "<total> <running> <queued>"; "ERROR" si no se puede leer.
+leer_estado() {
+    python3 - "$DATA" <<'PYEOF'
+import collections
+import json
+import sys
+
+try:
+    with open(sys.argv[1], "r") as archivo:
+        jobs = json.load(archivo)
+except Exception:
+    print("ERROR")
+    sys.exit(0)
+
+conteo = collections.Counter(j.get("status") for j in jobs)
+print(len(jobs), conteo.get("RUNNING", 0), conteo.get("QUEUED", 0))
+PYEOF
+}
+
+# Paso 1: compilación limpia
 make clean && make
 if [ $? -ne 0 ]; then
-    echo "[FAIL] TC-002 (compilación)"
+    echo "[ FAIL ] TC-002 (compilación)"
     exit 1
 fi
-echo "Paso 1 OK (compilación limpia)"
+echo "Paso 1 OK (compilación limpia y ejecutable actualizado)"
 
-# Paso 2: Ocupar los 5 workers con trabajos de larga duración
-for _ in $(seq 1 5); do
-    ./hermes job sleep 120 > /dev/null
+# Paso 2: forzar la configuración del escenario
+mkdir -p "$DATA_DIR"
+cat <<EOF > "$CONFIG_FILE"
+{
+  "trabajos_maximos": $LIMITE,
+  "max_cola": $COLA
+}
+EOF
+echo "Paso 2 OK (trabajos_maximos=$LIMITE, max_cola=$COLA)"
+
+# Paso 3: ráfaga de solicitudes de larga duración (4 para 3 workers)
+SALIDAS="$TEST_HOME/salidas"
+mkdir -p "$SALIDAS"
+PIDS=()
+for i in $(seq 1 "$SOLICITUDES"); do
+    ./hermes job sleep "$DURACION" > "$SALIDAS/job-$i.txt" 2>&1 &
+    PIDS+=("$!")
 done
 
-# Esperar activamente a que los 5 estén en RUNNING
-RUNNING=0
-for _ in $(seq 1 50); do
-    RUNNING=$(python3 -c "
-import json
-try:
-    with open('$DATA') as f:
-        data = json.load(f)
-        print(sum(1 for j in data if j.get('status') == 'RUNNING'))
-except:
-    print(0)
-")
-    [ "${RUNNING:-0}" -ge 5 ] && break
+ADMITIDAS=0
+IDS=()
+for i in $(seq 1 "$SOLICITUDES"); do
+    if wait "${PIDS[$((i - 1))]}"; then
+        ADMITIDAS=$((ADMITIDAS + 1))
+    else
+        echo "  solicitud $i rechazada: $(cat "$SALIDAS/job-$i.txt")"
+    fi
+    id="$(grep -oP 'job ID: \K[0-9]+' "$SALIDAS/job-$i.txt" | head -n 1)"
+    [[ -n "$id" ]] && IDS+=("$id")
+done
+
+if [ "$ADMITIDAS" -eq "$SOLICITUDES" ] && [ "${#IDS[@]}" -eq "$SOLICITUDES" ]; then
+    echo "Paso 3 OK ($ADMITIDAS/$SOLICITUDES solicitudes admitidas: ${IDS[*]})"
+else
+    fallar "solo se admitieron $ADMITIDAS de $SOLICITUDES solicitudes (se esperaba la cola de espera, no un rechazo)"
+fi
+
+# Paso 4: auditoría inmediata del límite (RNF-04 y RNF-07).
+# Se espera de forma acotada a que el pool ocupe sus workers; en cuanto el
+# tercer Job entra en RUNNING el estado es estable porque los Jobs duran 10 s.
+ESTADO=""
+for _ in $(seq 1 100); do
+    ESTADO="$(leer_estado)"
+    read -r TOTAL_JOBS RUNNING QUEUED <<< "$ESTADO"
+    [[ "$RUNNING" =~ ^[0-9]+$ ]] || { sleep 0.1; continue; }
+    [ "$RUNNING" -ge "$LIMITE" ] && break
     sleep 0.1
 done
+read -r TOTAL_JOBS RUNNING QUEUED <<< "$ESTADO"
+[[ "$TOTAL_JOBS" =~ ^[0-9]+$ ]] || TOTAL_JOBS=0
+[[ "$RUNNING" =~ ^[0-9]+$ ]] || RUNNING=0
+[[ "$QUEUED" =~ ^[0-9]+$ ]] || QUEUED=0
 
-if [ "${RUNNING:-0}" -ge 5 ]; then
-    echo "Precondición OK (5 trabajadores ocupados en RUNNING)"
+if [ "$TOTAL_JOBS" = "$SOLICITUDES" ]; then
+    echo "Paso 4 OK ($TOTAL_JOBS Jobs persistidos)"
 else
-    echo "Precondición FAIL (solo ${RUNNING:-0} de 5 en RUNNING)"
-    exit 1
+    fallar "se esperaban $SOLICITUDES Jobs persistidos y hay ${TOTAL_JOBS:-0}"
 fi
 
-# Anotar último job_id M
-M=$(python3 -c "
+if [ "$RUNNING" -eq "$LIMITE" ]; then
+    echo "Paso 5 OK ($RUNNING Jobs RUNNING con límite $LIMITE)"
+else
+    fallar "se esperaban exactamente $LIMITE Jobs RUNNING y hay ${RUNNING:-0}"
+fi
+
+# Paso 6: el excedente quedó retenido en cola (RF-03)
+if [ "$QUEUED" -eq "$COLA" ]; then
+    echo "Paso 6 OK ($QUEUED Job QUEUED retenido)"
+else
+    fallar "se esperaba exactamente $COLA Job QUEUED y hay ${QUEUED:-0}"
+fi
+
+QUEUED_ID="$(python3 - "$DATA" <<'PYEOF'
 import json
-try:
-    with open('$DATA') as f:
-        data = json.load(f)
-        print(max(j.get('job_id', 0) for j in data) if data else 0)
-except:
-    print(0)
-")
-[ -z "$M" ] && M=0
-echo "Paso 2 OK (último job_id M=$M)"
+import sys
 
-# APAGAR EL SCHEDULER: Detenemos el demonio para evitar que tome el siguiente trabajo 
-# y lo pase a RUNNING antes de que podamos auditar su estado QUEUED inicial.
-SCHEDULER_PID="$(find_scheduler_pid)"
-if [[ -n "$SCHEDULER_PID" ]]; then
-    kill -9 "$SCHEDULER_PID" 2>/dev/null || true
-    sleep 0.3
-fi
+jobs = json.load(open(sys.argv[1]))
+for job in jobs:
+    if job.get("status") == "QUEUED":
+        print(job.get("job_id"))
+        break
+PYEOF
+)"
 
-# Paso 3: Crear el sexto trabajo con el scheduler inactivo.
-# Como el scheduler está apagado, el job se quedará guardado estáticamente en jobs.json como QUEUED.
-OUT=$(./hermes job sleep 30 2>&1)
-RC=$?
-N=$(echo "$OUT" | grep -oP 'job ID: \K[0-9]+')
-if [ $RC -eq 0 ] && [ -n "$N" ]; then
-    echo "Paso 3 OK (job ID: $N, código 0)"
+if [ -z "$QUEUED_ID" ]; then
+    fallar "no se pudo identificar el Job en espera"
 else
-    echo "Paso 3 FAIL (salida: $OUT, código: $RC)"
-    FALLOS=1
-fi
+    echo "Paso 6.1 (auditoría del Job $QUEUED_ID):"
+    PYTHON_RES="$(python3 - "$DATA" "$QUEUED_ID" <<'PYEOF'
+import json
+import sys
 
-# Paso 4: Unicidad y orden N = M + 1
-if [ -n "$N" ] && [ "$N" -eq $((M + 1)) ]; then
-    echo "Paso 4 OK (N=$N = M+1)"
-else
-    echo "Paso 4 FAIL (M=$M, N=$N)"
-    FALLOS=1
-fi
-
-# Paso 5 y 6: Validación estricta con Python del estado QUEUED y pid 0
-echo "Paso 5 (entrada $N campo por campo):"
-PYTHON_RES=$(python3 - "$DATA" "$N" <<'PYEOF'
-import json, sys
 data_file = sys.argv[1]
 target_id = int(sys.argv[2])
 
 try:
-    with open(data_file, 'r') as f:
-        jobs = json.load(f)
-except Exception as e:
-    print(f"ERROR_JSON:{e}")
+    with open(data_file, "r") as archivo:
+        jobs = json.load(archivo)
+except Exception as error:
+    print(f"ERROR_JSON:{error}")
     sys.exit(1)
 
-job = next((j for j in jobs if j.get('job_id') == target_id), None)
+job = next((item for item in jobs if item.get("job_id") == target_id), None)
 if not job:
     print("JOB_NOT_FOUND")
     sys.exit(1)
 
-fail = False
+fallo = False
 
-# job_id
-if job.get('job_id') == target_id and isinstance(job.get('job_id'), int):
-    print(f"  OK (job_id = {target_id} (numérico))")
-else:
-    print(f"  FAIL (job_id = {job.get('job_id')})")
-    fail = True
 
-# programa
-if job.get('programa') == "sleep" and isinstance(job.get('programa'), str):
-    print("  OK (programa = sleep (cadena))")
-else:
-    print(f"  FAIL (programa = {job.get('programa')})")
-    fail = True
+def comprobar(condicion, ok, error):
+    global fallo
+    if condicion:
+        print(f"  OK ({ok})")
+    else:
+        print(f"  FAIL ({error})")
+        fallo = True
 
-# argumentos
-args = job.get('argumentos', [])
-if isinstance(args, list) and "30" in [str(x) for x in args]:
-    print("  OK (argumentos contiene 30)")
-else:
-    print(f"  FAIL (argumentos: {args})")
-    fail = True
 
-# status
-if job.get('status') == "QUEUED" and isinstance(job.get('status'), str):
-    print("  OK (status = QUEUED (cadena))")
-else:
-    print(f"  FAIL (status = {job.get('status')})")
-    fail = True
-
-# pid
-if job.get('pid') == 0 and isinstance(job.get('pid'), int):
-    print("  OK (pid = 0 (numérico))")
-else:
-    print(f"  FAIL (pid = {job.get('pid')})")
-    fail = True
-
-# codigo_salida
-if job.get('codigo_salida') == -1 and isinstance(job.get('codigo_salida'), int):
-    print("  OK (codigo_salida = -1 (numérico))")
-else:
-    print(f"  FAIL (codigo_salida = {job.get('codigo_salida')})")
-    fail = True
-
-# cancel_requested
-if job.get('cancel_requested') is False:
-    print("  OK (cancel_requested = false (booleano))")
-else:
-    print(f"  FAIL (cancel_requested = {job.get('cancel_requested')})")
-    fail = True
-
-sys.exit(1 if fail else 0)
-PYEOF
+comprobar(
+    isinstance(job.get("job_id"), int) and job.get("job_id") == target_id,
+    f"job_id = {target_id} (numérico)",
+    f"job_id = {job.get('job_id')}",
+)
+comprobar(
+    job.get("programa") == "sleep",
+    "programa = sleep (cadena)",
+    f"programa = {job.get('programa')}",
+)
+argumentos = [str(valor) for valor in job.get("argumentos", [])]
+comprobar(
+    isinstance(job.get("argumentos"), list) and "10" in argumentos,
+    "argumentos contiene 10",
+    f"argumentos: {job.get('argumentos')}",
+)
+comprobar(
+    job.get("status") == "QUEUED",
+    "status = QUEUED (cadena)",
+    f"status = {job.get('status')}",
+)
+comprobar(
+    isinstance(job.get("pid"), int) and job.get("pid") == 0,
+    "pid = 0 (numérico)",
+    f"pid = {job.get('pid')}",
+)
+comprobar(
+    isinstance(job.get("codigo_salida"), int) and job.get("codigo_salida") == -1,
+    "codigo_salida = -1 (numérico)",
+    f"codigo_salida = {job.get('codigo_salida')}",
+)
+comprobar(
+    job.get("cancel_requested") is False,
+    "cancel_requested = false (booleano)",
+    f"cancel_requested = {job.get('cancel_requested')}",
 )
 
-echo "$PYTHON_RES"
-if echo "$PYTHON_RES" | grep -q "FAIL"; then
-    FALLOS=1
+sys.exit(1 if fallo else 0)
+PYEOF
+)"
+    echo "$PYTHON_RES"
+    echo "$PYTHON_RES" | grep -q "FAIL" && fallar "la estructura del Job en espera no es la esperada"
 fi
 
-echo "Paso 6 OK (los patrones exigen tipos: números sin comillas, cadenas con comillas, booleano literal)"
+# Paso 7: auditoría pospuesta (resolución de la cola)
+echo "Paso 7 (esperando ${DURACION}+1 s a que el Job en espera se resuelva)..."
+sleep $((DURACION + 1))
 
-if [ $FALLOS -eq 0 ]; then
-    echo "[PASS] TC-002"
-    exit 0
+ESTADO_FINAL="$(python3 - "$DATA" "$QUEUED_ID" <<'PYEOF'
+import json
+import sys
+
+data_file = sys.argv[1]
+job_id = sys.argv[2]
+
+jobs = json.load(open(data_file))
+job = next((item for item in jobs if str(item.get("job_id")) == job_id), None)
+print(job.get("status") if job else "NOT_FOUND")
+PYEOF
+)"
+
+if [ "$ESTADO_FINAL" = "RUNNING" ] || [ "$ESTADO_FINAL" = "SUCCEEDED" ]; then
+    echo "Paso 7 OK (el Job $QUEUED_ID pasó de QUEUED a $ESTADO_FINAL)"
 else
-    echo "[FAIL] TC-002"
-    exit 1
+    fallar "el Job $QUEUED_ID sigue en estado $ESTADO_FINAL (se esperaba RUNNING o SUCCEEDED)"
 fi
+
+if [ "$FALLOS" -eq 0 ]; then
+    echo "[ PASS ] TC-002"
+    exit 0
+fi
+
+echo "[ FAIL ] TC-002"
+exit 1

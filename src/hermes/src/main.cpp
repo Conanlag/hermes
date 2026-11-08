@@ -72,31 +72,95 @@ int main(int argc, char* argv[]) {
     }
 
     if (comando == "configmax") {
-        if (argc != 3) {
-            error("Uso: hermes configmax <N> (N debe estar entre 1 y 64).");
+        const string uso =
+            "Uso: hermes configmax <N> | hermes configmax --cola <M> | "
+            "hermes configmax <N> --cola <M> "
+            "(N entre 1 y 64; M entre 0 y 256).";
+
+        bool tieneTrabajosMaximos = false;
+        bool tieneMaxCola = false;
+        string valorTrabajosMaximos;
+        string valorMaxCola;
+
+        for (int i = 2; i < argc; ++i) {
+            const string argumento = argv[i];
+
+            if (argumento == "--cola") {
+                if (tieneMaxCola || i + 1 >= argc) {
+                    error(uso);
+                    return 1;
+                }
+
+                valorMaxCola = argv[++i];
+                tieneMaxCola = true;
+                continue;
+            }
+
+            if (tieneTrabajosMaximos || argumento.rfind("--", 0) == 0) {
+                error(uso);
+                return 1;
+            }
+
+            valorTrabajosMaximos = argumento;
+            tieneTrabajosMaximos = true;
+        }
+
+        if (!tieneTrabajosMaximos && !tieneMaxCola) {
+            error(uso);
             return 1;
         }
 
-        const ResultadoValidacion validacion =
-            validarTrabajosMaximosTexto(argv[2]);
-        if (!validacion.esValido) {
-            error(validacion.mensaje);
-            return 1;
+        if (tieneTrabajosMaximos) {
+            const ResultadoValidacion validacion =
+                validarTrabajosMaximosTexto(valorTrabajosMaximos);
+            if (!validacion.esValido) {
+                error(validacion.mensaje);
+                return 1;
+            }
         }
 
-        const int trabajosMaximos = std::stoi(argv[2]);
+        if (tieneMaxCola) {
+            const ResultadoValidacion validacion =
+                validarMaxColaTexto(valorMaxCola);
+            if (!validacion.esValido) {
+                error(validacion.mensaje);
+                return 1;
+            }
+        }
+
+        hermes::CambiosConfiguracion cambios;
+        if (tieneTrabajosMaximos) {
+            cambios.trabajosMaximos = true;
+            cambios.valorTrabajosMaximos = std::stoi(valorTrabajosMaximos);
+        }
+        if (tieneMaxCola) {
+            cambios.maxCola = true;
+            cambios.valorMaxCola = std::stoi(valorMaxCola);
+        }
+
         try {
-            hermes::establecerTrabajosMaximos(trabajosMaximos);
+            hermes::actualizarConfiguracion(cambios);
         } catch (const exception& e) {
             error("No se pudo actualizar la configuración: ", e.what());
             return 1;
         }
 
-        info(
-            "Máximo de trabajos simultáneos configurado en ",
-            trabajosMaximos,
-            ". El cambio de workers se aplica al iniciar el scheduler."
-        );
+        if (tieneTrabajosMaximos) {
+            info(
+                "Máximo de trabajos simultáneos configurado en ",
+                cambios.valorTrabajosMaximos,
+                ". El cambio de workers se aplica al iniciar el scheduler."
+            );
+        }
+
+        if (tieneMaxCola) {
+            info(
+                "Cupos de espera (max_cola) configurados en ",
+                cambios.valorMaxCola,
+                ". El cambio se aplica al iniciar el scheduler."
+            );
+        }
+
         warning(
             "Para aplicarlo ahora, ejecute 'hermes clean scheduler'; "
             "los trabajos en ejecución serán interrumpidos."
@@ -164,7 +228,8 @@ int main(int argc, char* argv[]) {
                 programa,
                 argumentos,
                 requestId,
-                config.trabajosMaximos
+                config.trabajosMaximos,
+                config.maxCola
             );
         } catch (const exception& e) {
             error("No se pudo crear el Job: ", e.what());

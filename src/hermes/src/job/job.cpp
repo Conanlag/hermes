@@ -59,13 +59,27 @@ Job crearJob(
     const string& programa,
     const vector<string>& argumentos,
     const string& requestId,
-    int trabajosMaximos
+    int trabajosMaximos,
+    int maxCola
 ) {
     if (trabajosMaximos < 1) {
         throw invalid_argument(
             "La capacidad máxima debe ser mayor que cero"
         );
     }
+
+    if (maxCola < 0) {
+        throw invalid_argument(
+            "La capacidad de la cola no puede ser negativa"
+        );
+    }
+
+    // El límite de concurrencia lo impone el pool de workers del scheduler;
+    // aquí solo se acota cuántos Jobs pueden estar admitidos a la vez para que
+    // el excedente quede en espera (RF-03) y no se pierda la solicitud.
+    const size_t capacidadTotal =
+        static_cast<size_t>(trabajosMaximos) +
+        static_cast<size_t>(maxCola);
 
     Job nuevo{};
     nuevo.pid = 0;
@@ -81,6 +95,7 @@ Job crearJob(
     bool solicitudExistente = false;
     bool colaLlena = false;
     size_t trabajosActivos = 0;
+    size_t trabajosEnEspera = 0;
     bool guardado = modificarJobsSeguros([&](json& jobs) {
         if (!requestId.empty()) {
             for (const auto& item : jobs) {
@@ -140,9 +155,12 @@ Job crearJob(
             if (status == "QUEUED" || status == "RUNNING") {
                 ++trabajosActivos;
             }
+            if (status == "QUEUED") {
+                ++trabajosEnEspera;
+            }
         }
 
-        if (trabajosActivos >= static_cast<size_t>(trabajosMaximos)) {
+        if (trabajosActivos >= capacidadTotal) {
             colaLlena = true;
             return false;
         }
@@ -173,7 +191,9 @@ Job crearJob(
         contexto["programa"] = programa;
         contexto["motivo_del_rechazo"] = "capacidad_de_trabajos_alcanzada";
         contexto["trabajos_activos"] = trabajosActivos;
-        contexto["capacidad"] = trabajosMaximos;
+        contexto["trabajos_en_espera"] = trabajosEnEspera;
+        contexto["capacidad"] = capacidadTotal;
+        contexto["capacidad_cola"] = maxCola;
         if (!requestId.empty()) {
             contexto["request_id"] = requestId;
         }
@@ -184,7 +204,7 @@ Job crearJob(
         );
         string mensajeRechazo =
             "La cola está llena (" + to_string(trabajosActivos) +
-            "/" + to_string(trabajosMaximos) +
+            "/" + to_string(capacidadTotal) +
             " trabajos activos). Intente de nuevo cuando haya espacio.";
         if (!rechazoRegistrado) {
             mensajeRechazo += " No se pudo registrar el rechazo en la bitácora.";

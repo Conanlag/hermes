@@ -190,7 +190,7 @@ Al ejecutar Hermes por primera vez, se crean el directorio y los archivos que fa
 | Archivo | Para qué sirve |
 | ------- | -------------- |
 | `jobs.json` | Guarda los Jobs creados y sus datos, como ID, programa, argumentos, estado y resultado. |
-| `config.json` | Configura `trabajos_maximos` (de 1 a 64; predeterminado 5): el número de workers y el máximo de Jobs activos admitidos (`QUEUED` + `RUNNING`). Las solicitudes nuevas se rechazan explícitamente cuando se alcanza el límite. |
+| `config.json` | Configura `trabajos_maximos` (de 1 a 64; predeterminado 5), el número de workers y el máximo de Jobs en ejecución (`RUNNING`), y opcionalmente `max_cola` (de 0 a 256; predeterminado 0), los cupos de espera (`QUEUED`) que se admiten por encima de ese límite. Con `max_cola` en 0, el excedente se rechaza explícitamente; con un valor mayor, el excedente espera en la cola (véase ADR-017). |
 | `config.lock` | Archivo interno para coordinar actualizaciones concurrentes de `config.json`. |
 | `jobs.lock` | Archivo interno para coordinar escrituras simultáneas en los datos de Jobs. No se debe borrar mientras Hermes está trabajando. |
 | `scheduler.lock` | Archivo interno que permite detectar si ya está activo el scheduler de Hermes. No se debe borrar ni editar manualmente. |
@@ -217,11 +217,15 @@ hermes cancel
 hermes clean data
 hermes clean scheduler
 hermes configmax <N>
+hermes configmax --cola <M>
+hermes configmax <N> --cola <M>
 hermes --version
 hermes --help
 ```
 
 `hermes configmax <N>` guarda el máximo de trabajos simultáneos en `config.json`. El valor permitido es de 1 a 64. La configuración de workers se aplica cuando inicia el scheduler; si ya está activo, ejecuta `hermes clean scheduler` para reiniciarlo. Ten en cuenta que el apagado ordenado interrumpe los trabajos en ejecución.
+
+`hermes configmax --cola <M>` guarda los cupos de espera en cola, es decir, cuántos trabajos `QUEUED` se admiten por encima del máximo simultáneo. El valor permitido es de 0 a 256, y `0` significa que no hay cola de espera: el excedente se rechaza. Con ambos argumentos, `hermes configmax 5 --cola 2`, los dos valores se validan y se escriben en una sola operación atómica.
 
 `hermes clean scheduler` solicita el apagado ordenado del scheduler actual y
 espera a que termine. Los trabajos que estuvieran ejecutándose se detienen y

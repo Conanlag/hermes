@@ -5,9 +5,9 @@
 |:---------|:--------------------|:------------|:---------|:----------|:------------|:------------|:--------------------|
 | RF-01    | Envi­o de comando/programa y generacion de ID unico | Alta | Prueba | TC-001    | verif/scripts/TC-001.sh + verif/results/tc001.log ([PASS]) | PASS        | -                   |
 | RF-02    | Validacion de solicitudes con mensaje util | Alta        | Prueba  | TC-001    | verif/scripts/TC-001.sh + verif/results/tc001.log ([PASS]) | PASS        | -                   |
-| RF-03    | Cola inicial cuando no hay capacidad inmediata | Alta        | Prueba  | TC-002    | verif/scripts/TC-002.sh + verif/results/tc002.log ([FAIL]) | FAIL | -                   |
+| RF-03    | Cola inicial cuando no hay capacidad inmediata | Alta        | Prueba  | TC-002    | verif/scripts/TC-002.sh + verif/results/tc002.log ([PASS], 2026-11-07); cola de espera vía `max_cola` (ADR-017) | PASS | - |
 | RF-04    |                     |             |          |           |             | Pendiente   |                     |
-| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-025 | verif/scripts/TC-025.sh; verif/results/results.md ([PASS], 2026-10-30) | PASS | - |
+| RF-05    | Máximo configurable de trabajos simultáneos | Alta | Prueba | TC-002 | verif/scripts/TC-002.sh + verif/results/tc002.log ([PASS], 2026-11-07); límite 3 respetado y 4.ª solicitud retenida en cola; `hermes configmax <N>`, `--cola <M>` y ambos validados manualmente | PASS | - |
 | RF-06    | Estados QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, INTERRUPTED | CrÃ­tica     | Prueba  | TC-003    | verif/scripts/TC-003.sh + verif/results/tc003.log ([PASS]) | PASS        | -                   |
 | RF-07    | Tiempos de recepcion, inicio, terminaciÃ³n y cÃ³digo de salida | Alta        | Prueba  | TC-003, TC-006 | tc003.log + tc006.log ([PASS]) | PASS        | -                   |
 | RF-08    | Consulta de un trabajo mediante ID | Alta        | Prueba  | TC-004    | verif/scripts/TC-004.sh + verif/results/tc004.log ([PASS]) | PASS        | -                   |
@@ -34,12 +34,11 @@
 | RNF-01   | Compila y se ejecuta en distro Linux declarada | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-02   | Construccion reproducible desde clon limpio | Alta        | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
 | RNF-03   | Sin privilegios root en operaciÃ³n normal | Media       | Prueba  | TC-014    | verif/scripts/TC-014.sh + verif/results/tc014.log ([PASS]) | PASS        | -                   |
-| RNF-04   | Al menos 3 Jobs simultáneos con el límite configurado en 3 | Alta | Prueba de concurrencia | TC-024 | verif/scripts/TC-024.sh + verif/results/results_TC-024.md ([PASS]) | PASS | - |
+| RNF-04   | Al menos 3 Jobs simultáneos con el límite configurado en 3 | Alta | Prueba de concurrencia | TC-002 | verif/scripts/TC-002.sh + verif/results/tc002.log (3 RUNNING con `trabajos_maximos: 3` y `max_cola: 1`, [PASS], 2026-11-07) | PASS | - |
 | RNF-05   | Consulta de estado en menos de 1 s con 100 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; evidencia acumulada en verif/results/results_TC-018.md | PASS | - |
-| RNF-04   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-05   | Consulta de programa en menos de 1 s con al menos 100 Jobs | Alta | Prueba | TC-004 | verif/scripts/TC-004.sh; verif/results/tc004.log (100 Jobs en 0.013 s, [PASS]) | PASS | - |
 | RNF-06   | Conservación de metadatos para al menos 500 Jobs | Alta | Prueba | TC-018 | verif/scripts/TC-018.sh; fixture de 519 registros validado | PASS | - |
-| RNF-07   | Los procesos hijo concurrentes no superan trabajos_maximos | Alta | Prueba de concurrencia | TC-023, TC-024 | verif/scripts/TC-023.sh y TC-024.sh; verif/results/results_TC-023.md y results_TC-024.md ([PASS]) | PASS | - |
+| RNF-07   | Los procesos hijo concurrentes no superan trabajos_maximos | Alta | Prueba de concurrencia | TC-002, TC-023, TC-024 | verif/scripts/TC-002.sh ([PASS], 2026-11-07): 3 RUNNING + 1 QUEUED, nunca 4 procesos; verif/results/results_TC-023.md | PASS | - |
 | RNF-08   | Solicitud invalida no termina el servicio (local; desconexion en Fase 2) | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
 | RNF-09   | TerminaciÃ³n anormal de un trabajo no afecta a otros | Alta | Prueba | TC-008 | verif/scripts/TC-008.sh + verif/results/tc008.log ([PASS]) | PASS | -                   |
 | RNF-10 | Prevención de falsos positivos en supervisión: tras un reinicio, el sistema no reportará como RUNNING a procesos huérfanos. | Crítica | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | Pendiente | - |

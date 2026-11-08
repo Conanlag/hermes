@@ -21,6 +21,8 @@ int mostrarAyuda() {
     cout << "  clean data                     Limpia el historial de trabajos finalizados" << endl;
     cout << "  clean scheduler                Detiene el scheduler ordenadamente" << endl;
     cout << "  configmax <N>                  Configura el máximo de trabajos simultáneos (1-64)" << endl;
+    cout << "  configmax --cola <M>           Configura los cupos de espera en cola (0-256)" << endl;
+    cout << "  configmax <N> --cola <M>       Configura ambos valores en una sola operación" << endl;
     cout << "  logs                           Muestra la bitácora de eventos" << endl;
     cout << "  --version                      Muestra la version" << endl;
     cout << "  --help                         Muestra esta ayuda" << endl;
@@ -38,6 +40,7 @@ int mostrarAyuda() {
     cout << "  hermes clean data" << endl;
     cout << "  hermes clean scheduler" << endl;
     cout << "  hermes configmax 3" << endl;
+    cout << "  hermes configmax 5 --cola 2" << endl;
     cout << "  hermes logs" << endl;
     cout << endl;
 

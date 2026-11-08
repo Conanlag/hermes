@@ -10,11 +10,14 @@ hermes/
 │   │   └── json.hpp
 │   ├── cancel.h
 │   ├── clean.h
+│   ├── config.h
 │   ├── data_paths.h
+│   ├── event_log.h
 │   ├── filter.h
 │   ├── help.h
 │   ├── job.h
 │   ├── process.h
+│   ├── recovery.h
 │   ├── scheduler.h
 │   ├── status.h
 │   ├── storage.h
@@ -26,6 +29,11 @@ hermes/
 ├── src/
 │   ├── cancel/
 │   │   └── cancel.cpp
+│   ├── config/
+│   │   ├── config.cpp
+│   │   └── config_update.cpp
+│   ├── events/
+|   |   └──event_log.cpp
 │   ├── clean/
 │   │   └── clean.cpp
 │   ├── filter/
@@ -35,6 +43,8 @@ hermes/
 │   ├── job/
 │   │   └── job.cpp
 │   ├── network/
+│   ├── recovery/
+│   │   └── recovery.cpp
 │   ├── process/
 │   │   └── process.cpp
 │   ├── scheduler/
@@ -67,8 +77,11 @@ Cada directorio tendrá una responsabilidad específica:
 - ```src/help/```: contendrá la implementación del comando de ayuda (texto de uso).
 - ```src/validator/```: contendrá la validación de entradas del usuario y los códigos de error asociados.
 - ```src/process/```: contendrá la gestión de procesos hijos (espera, terminación y escalado de cancelación).
+- ```src/recovery/```: contendrá la lógica de recuperación ante fallos e interrupciones del sistema, permitiendo verificar la capacidad de arranque y reclasificar de forma segura los trabajos huérfanos
 - ```src/cancel/```: contendrá la lógica del comando de cancelación de jobs.
 - ```src/clean/```: contendrá la lógica del comando de limpieza del historial persistente.
+- ```src/config/```: contendrá la lógica de lectura, validación y persistencia de la configuración del sistema (como el número máximo de trabajos permitidos y la tolerancia a fallos ante archivos corruptos o ausentes).
+- ```src/events/```: encargado del sistema centralizado de bitácoras y eventos estructurados, permitiendo registrar mensajes con diferentes niveles de severidad (DEBUG, INFO, WARN, ERROR), asociarlos a un trabajo específico o a nivel de sistema, y gestionar flujos de monitoreo.
 - ```src/scheduler/```: contendrá el scheduler en segundo plano que lanza los jobs pendientes.
 - ```src/storage/```: contendrá el acceso serializado al almacenamiento JSON (lectura/escritura con bloqueo).
 - ```src/network/```: contendrá los componentes relacionados con la comunicación entre computadoras dentro de una red.
@@ -100,7 +113,7 @@ En el repositorio, `src/hermes/data` es un enlace simbólico a ese directorio. A
 | Archivo | Contenido o función |
 | ------- | ------------------- |
 | `jobs.json` | Arreglo JSON con el historial y los metadatos de cada Job: ID, programa, argumentos, estado, PID, tiempos y resultado. |
-| `config.json` | Configura `trabajos_maximos`, el máximo de workers simultáneos y el máximo de Jobs activos admitidos (`QUEUED` + `RUNNING`), de 1 a 64. Si falta o no es válido, se usa `5`. Se actualiza con `hermes configmax <N>`; el límite de admisión se lee en cada invocación y la cantidad de workers al iniciar el scheduler. |
+| `config.json` | Configura `trabajos_maximos` (máximo de workers simultáneos, de 1 a 64; si falta o no es válido se usa `5`) y, opcionalmente, `max_cola` (cupos de espera `QUEUED` por encima de ese límite, de 0 a 256; predeterminado `0`). Se actualiza con `hermes configmax <N>`, con `hermes configmax --cola <M>` o con ambos en una sola operación; el límite de admisión se lee en cada invocación y la cantidad de workers al iniciar el scheduler. |
 | `config.lock` | Bloqueo interno que serializa cambios concurrentes de `config.json`. |
 | `jobs.lock` | Archivo de bloqueo que `flock` usa para serializar modificaciones concurrentes del almacenamiento. |
 | `scheduler.lock` | Bloqueo exclusivo que conserva abierto el scheduler en segundo plano para evitar iniciar otro scheduler al mismo tiempo; también contiene el PID del daemon para `hermes clean scheduler`. |

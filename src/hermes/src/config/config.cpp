@@ -96,6 +96,47 @@ ConfiguracionSistema cargarConfiguracion() {
         config.trabajosMaximos = valor;
     }
 
+    // `max_cola` es opcional: su ausencia conserva la política histórica de no
+    // admitir Jobs en espera.
+    if (datos.contains("max_cola")) {
+        if (!datos["max_cola"].is_number_integer()) {
+            EventLog::log_event_system(
+                EventLevel::WARN,
+                "Llave 'max_cola' no entera en config.json; se utiliza el valor por defecto",
+                {
+                    {"archivo", ruta},
+                    {"max_cola", config.maxCola}
+                }
+            );
+        } else {
+            const int cola = datos["max_cola"].get<int>();
+
+            if (cola < MIN_MAX_COLA) {
+                EventLog::log_event_system(
+                    EventLevel::WARN,
+                    "Valor de 'max_cola' inferior al mínimo permitido; ajustando al límite inferior",
+                    {
+                        {"valor_leido", cola},
+                        {"valor_ajustado", MIN_MAX_COLA}
+                    }
+                );
+                config.maxCola = MIN_MAX_COLA;
+            } else if (cola > MAX_MAX_COLA) {
+                EventLog::log_event_system(
+                    EventLevel::WARN,
+                    "Valor de 'max_cola' superior al límite seguro; ajustando al límite superior",
+                    {
+                        {"valor_leido", cola},
+                        {"valor_ajustado", MAX_MAX_COLA}
+                    }
+                );
+                config.maxCola = MAX_MAX_COLA;
+            } else {
+                config.maxCola = cola;
+            }
+        }
+    }
+
     return config;
 }
 

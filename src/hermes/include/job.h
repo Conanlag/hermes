@@ -36,7 +36,8 @@ Job crearJob(
     const string& programa,
     const vector<string>& argumentos,
     const string& requestId = "",
-    int trabajosMaximos = 5
+    int trabajosMaximos = 5,
+    int maxCola = 0
 );
 
 

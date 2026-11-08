@@ -6,4 +6,5 @@
 | TC-021 | RF-30 | Cancelación normal de un proceso que ignora SIGTERM y escalamiento forzoso después del periodo de gracia de 5 segundos | PASS | `verif/results/tc021.log` |
 | TC-022 | RNF-28, RNF-31 | Interrupción durante persistencia y recuperación fail-closed | PASS | `verif/results/results_TC-022.md` |
 | TC-024 | RNF-33 | Liberación de recursos tras 100 Jobs `true`; no se estresó el ciclo de vida de sockets | PASS parcial (2026-10-30) | `verif/results/results_TC-024.md` |
-| TC-025 | RF-05 | Configuración y límite de trabajos simultáneos | PASS (2026-10-30) | Salida de `verif/scripts/TC-025.sh` |
+| TC-002 | RF-03, RF-05, RNF-04, RNF-07 | Cola de espera con `trabajos_maximos: 3` y `max_cola: 1`: 4/4 solicitudes admitidas, 3 `RUNNING` + 1 `QUEUED`, y la retenida pasa a `RUNNING` | PASS (2026-11-07) | `verif/results/tc002.log` |
+| TC-003 | RF-06, RF-07 | Estados y tiempos: `SUCCEEDED`, `FAILED`, `CANCELED` y `QUEUED` con 5 workers + 1 cupo de espera | PASS (2026-11-07) | `verif/results/tc003.log` |
