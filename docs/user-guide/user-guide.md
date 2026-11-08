@@ -190,7 +190,7 @@ Al ejecutar Hermes por primera vez, se crean el directorio y los archivos que fa
 | Archivo | Para qué sirve |
 | ------- | -------------- |
 | `jobs.json` | Guarda los Jobs creados y sus datos, como ID, programa, argumentos, estado y resultado. |
-| `config.json` | Configura `trabajos_maximos` (de 1 a 64; predeterminado 5): el número de workers y el máximo de Jobs activos admitidos (`QUEUED` + `RUNNING`). Las solicitudes nuevas se rechazan explícitamente cuando se alcanza el límite. |
+| `config.json` | Configura `trabajos_maximos` (de 1 a 64; predeterminado 5), el número de workers y el máximo de Jobs en ejecución (`RUNNING`), y opcionalmente `max_cola` (de 0 a 256; predeterminado 0), los cupos de espera (`QUEUED`) que se admiten por encima de ese límite. Con `max_cola` en 0, el excedente se rechaza explícitamente; con un valor mayor, el excedente espera en la cola (véase ADR-017). |
 | `config.lock` | Archivo interno para coordinar actualizaciones concurrentes de `config.json`. |
 | `jobs.lock` | Archivo interno para coordinar escrituras simultáneas en los datos de Jobs. No se debe borrar mientras Hermes está trabajando. |
 | `scheduler.lock` | Archivo interno que permite detectar si ya está activo el scheduler de Hermes. No se debe borrar ni editar manualmente. |

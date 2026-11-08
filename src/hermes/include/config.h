@@ -7,8 +7,16 @@ constexpr int DEFAULT_TRABAJOS_MAXIMOS = 5;
 constexpr int MIN_TRABAJOS_MAXIMOS = 1;
 constexpr int MAX_TRABAJOS_MAXIMOS = 64;
 
+// Cupos de espera (QUEUED) por encima de trabajos_maximos. Cero significa que
+// no se admite cola de espera y que el excedente se rechaza, que es el
+// comportamiento histórico descrito en ADR-008.
+constexpr int DEFAULT_MAX_COLA = 0;
+constexpr int MIN_MAX_COLA = 0;
+constexpr int MAX_MAX_COLA = 256;
+
 struct ConfiguracionSistema {
     int trabajosMaximos = DEFAULT_TRABAJOS_MAXIMOS;
+    int maxCola = DEFAULT_MAX_COLA;
 };
 
 /**

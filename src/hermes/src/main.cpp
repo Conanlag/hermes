@@ -164,7 +164,8 @@ int main(int argc, char* argv[]) {
                 programa,
                 argumentos,
                 requestId,
-                config.trabajosMaximos
+                config.trabajosMaximos,
+                config.maxCola
             );
         } catch (const exception& e) {
             error("No se pudo crear el Job: ", e.what());

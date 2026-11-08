@@ -22,8 +22,16 @@ export HOME="$TEST_ROOT/home"
 mkdir -p "$HOME"
 
 DATA="$HOME/.local/share/hermes/data/jobs.json"
+CONFIG="$HOME/.local/share/hermes/data/config.json"
 LOCK="$HOME/.local/share/hermes/data/scheduler.lock"
 FALLOS=0
+
+# RF-03/RF-05: la capacidad de admisión es trabajos_maximos + max_cola. Se
+# fijan 5 workers y 1 cupo de espera para que el Paso 5 pueda observar un Job
+# QUEUED mientras los 5 workers están ocupados. El scheduler lee este archivo
+# al arrancar, así que debe existir antes de la primera solicitud.
+mkdir -p "$(dirname "$CONFIG")"
+printf '{\n  "trabajos_maximos": 5,\n  "max_cola": 1\n}\n' > "$CONFIG"
 
 find_scheduler_pid() {
     local descriptor target process_path
@@ -100,14 +108,27 @@ else
     FALLOS=$((FALLOS + 1))
 fi
 
-# Precondición (RF-03): el planificador atiende con 5 trabajadores
-# (NUM_TRABAJADORES en scheduler.cpp). Se ocupan los 5 con "sleep 30" para
+# Precondición (RF-03): la capacidad de admisión es trabajos_maximos + max_cola,
+# fijada en 5 + 1 por config.json. Se ocupan los 5 workers con "sleep 30" para
 # que el job del Paso 5 no encuentre hueco y permanezca en cola.
+contar_estado() {
+    python3 -c '
+import json, sys
+
+try:
+    jobs = json.load(open(sys.argv[1]))
+except Exception:
+    print(0)
+    raise SystemExit
+print(sum(1 for j in jobs if j.get("status") == sys.argv[2]))
+' "$DATA" "$1" 2>/dev/null || echo 0
+}
+
 for _ in 1 2 3 4 5; do
     ./hermes job sleep 30 > /dev/null
 done
 for _ in $(seq 1 50); do
-    RUNNING=$(grep -c '"status": "RUNNING"' "$DATA" 2>/dev/null || true)
+    RUNNING=$(contar_estado RUNNING)
     [ "${RUNNING:-0}" -ge 5 ] && break
     sleep 0.1
 done

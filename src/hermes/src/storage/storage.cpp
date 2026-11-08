@@ -98,7 +98,7 @@ json leerSinBloqueo() {
 
     string errorPrincipal;
 
-    try {
+    try {   
         return leerArreglo(ruta);
     } catch (const exception& error) {
         errorPrincipal = error.what();
