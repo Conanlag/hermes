@@ -217,11 +217,15 @@ hermes cancel
 hermes clean data
 hermes clean scheduler
 hermes configmax <N>
+hermes configmax --cola <M>
+hermes configmax <N> --cola <M>
 hermes --version
 hermes --help
 ```
 
 `hermes configmax <N>` guarda el máximo de trabajos simultáneos en `config.json`. El valor permitido es de 1 a 64. La configuración de workers se aplica cuando inicia el scheduler; si ya está activo, ejecuta `hermes clean scheduler` para reiniciarlo. Ten en cuenta que el apagado ordenado interrumpe los trabajos en ejecución.
+
+`hermes configmax --cola <M>` guarda los cupos de espera en cola, es decir, cuántos trabajos `QUEUED` se admiten por encima del máximo simultáneo. El valor permitido es de 0 a 256, y `0` significa que no hay cola de espera: el excedente se rechaza. Con ambos argumentos, `hermes configmax 5 --cola 2`, los dos valores se validan y se escriben en una sola operación atómica.
 
 `hermes clean scheduler` solicita el apagado ordenado del scheduler actual y
 espera a que termine. Los trabajos que estuvieran ejecutándose se detienen y

@@ -30,7 +30,7 @@ El valor por defecto `max_cola = 0` conserva exactamente la política de ADR-008
 | Alternativas      | Cola ilimitada (elimina RF-23/RF-25 y rompe TC-016 y TC-023); derivar la cola de `trabajos_maximos` (con capacidad 2 rompe la expectativa de TC-023 de 1 aceptación y 7 rechazos); mantener ADR-008 (deja RF-03 sin implementación). |
 | Consecuencias     | Con `max_cola > 0` el excedente espera en lugar de perderse; el cliente deja de necesitar reintentos. La documentación de configuración debe mencionar ambas llaves.                                      |
 | Riesgos           | Un `max_cola` alto retrasa la realimentación al cliente. La cola solo aplica al arrancar el scheduler, igual que `trabajos_maximos` (ADR-015).                                                            |
-| Evidencia técnica | `config.h`/`config.cpp` parsean `max_cola` de forma tolerante; `crearJob()` compara contra `trabajosMaximos + maxCola` dentro de la transacción bloqueada; `main.cpp` propaga ambos valores; el pool de `scheduler.cpp` no cambia. |
+| Evidencia técnica | `config.h`/`config.cpp` parsean `max_cola` de forma tolerante; `crearJob()` compara contra `trabajosMaximos + maxCola` dentro de la transacción bloqueada; `main.cpp` propaga ambos valores; `actualizarConfiguracion()` valida y persiste una o ambas llaves bajo `config.lock` con escritura atómica; el pool de `scheduler.cpp` no cambia. |
 
 ## Relación con otras decisiones
 

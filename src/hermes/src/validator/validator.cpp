@@ -380,15 +380,22 @@ ResultadoValidacion validarStatusTexto(
     };
 }
 
-ResultadoValidacion validarTrabajosMaximosTexto(
-    const string& texto
+namespace {
+
+ResultadoValidacion validarEnteroEnRango(
+    const string& texto,
+    int minimo,
+    int maximo,
+    const string& comando,
+    const string& mensajeUso,
+    const string& etiquetaValor
 ) {
     if (texto.empty()) {
         hermes::EventLog::log_event_system(
             hermes::EventLevel::WARN,
             "Rechazo de Validación",
             {
-                {"comando_intentado", "configmax"},
+                {"comando_intentado", comando},
                 {"valor_intentado", texto},
                 {"motivo_del_rechazo", "Valor vacío"}
             }
@@ -396,9 +403,7 @@ ResultadoValidacion validarTrabajosMaximosTexto(
         return {
             false,
             CodigoValidacion::VACIO,
-            "Uso: hermes configmax <N> (N debe estar entre " +
-                to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
-                to_string(hermes::MAX_TRABAJOS_MAXIMOS) + ")."
+            mensajeUso
         };
     }
 
@@ -412,7 +417,7 @@ ResultadoValidacion validarTrabajosMaximosTexto(
             hermes::EventLevel::WARN,
             "Rechazo de Validación",
             {
-                {"comando_intentado", "configmax"},
+                {"comando_intentado", comando},
                 {"valor_intentado", texto},
                 {"motivo_del_rechazo", "Valor no es un entero válido"}
             }
@@ -420,19 +425,18 @@ ResultadoValidacion validarTrabajosMaximosTexto(
         return {
             false,
             CodigoValidacion::MALFORMADO,
-            "El valor debe ser un número entero entre " +
-                to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
-                to_string(hermes::MAX_TRABAJOS_MAXIMOS) + "."
+            "El valor " + etiquetaValor +
+                "debe ser un número entero entre " +
+                to_string(minimo) + " y " + to_string(maximo) + "."
         };
     }
 
-    if (valor < hermes::MIN_TRABAJOS_MAXIMOS ||
-        valor > hermes::MAX_TRABAJOS_MAXIMOS) {
+    if (valor < minimo || valor > maximo) {
         hermes::EventLog::log_event_system(
             hermes::EventLevel::WARN,
             "Rechazo de Validación",
             {
-                {"comando_intentado", "configmax"},
+                {"comando_intentado", comando},
                 {"valor_intentado", texto},
                 {"motivo_del_rechazo", "Valor fuera del rango permitido"}
             }
@@ -440,9 +444,8 @@ ResultadoValidacion validarTrabajosMaximosTexto(
         return {
             false,
             CodigoValidacion::MALFORMADO,
-            "El valor debe estar entre " +
-                to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
-                to_string(hermes::MAX_TRABAJOS_MAXIMOS) + "."
+            "El valor " + etiquetaValor + "debe estar entre " +
+                to_string(minimo) + " y " + to_string(maximo) + "."
         };
     }
 
@@ -451,4 +454,36 @@ ResultadoValidacion validarTrabajosMaximosTexto(
         CodigoValidacion::OK,
         ""
     };
+}
+
+} // namespace
+
+ResultadoValidacion validarTrabajosMaximosTexto(
+    const string& texto
+) {
+    return validarEnteroEnRango(
+        texto,
+        hermes::MIN_TRABAJOS_MAXIMOS,
+        hermes::MAX_TRABAJOS_MAXIMOS,
+        "configmax",
+        "Uso: hermes configmax <N> (N debe estar entre " +
+            to_string(hermes::MIN_TRABAJOS_MAXIMOS) + " y " +
+            to_string(hermes::MAX_TRABAJOS_MAXIMOS) + ").",
+        ""
+    );
+}
+
+ResultadoValidacion validarMaxColaTexto(
+    const string& texto
+) {
+    return validarEnteroEnRango(
+        texto,
+        hermes::MIN_MAX_COLA,
+        hermes::MAX_MAX_COLA,
+        "configmax --cola",
+        "Uso: hermes configmax [<N>] --cola <M> (M debe estar entre " +
+            to_string(hermes::MIN_MAX_COLA) + " y " +
+            to_string(hermes::MAX_MAX_COLA) + ").",
+        "de --cola "
+    );
 }

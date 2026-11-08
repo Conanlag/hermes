@@ -183,51 +183,116 @@ void guardarAtomico(const std::string& ruta, const json& datos) {
 
 namespace hermes {
 
-void establecerTrabajosMaximos(int trabajosMaximos) {
-    if (trabajosMaximos < MIN_TRABAJOS_MAXIMOS ||
-        trabajosMaximos > MAX_TRABAJOS_MAXIMOS) {
+namespace {
+
+void validarRango(
+    int valor,
+    int minimo,
+    int maximo,
+    const std::string& clave
+) {
+    if (valor < minimo || valor > maximo) {
         throw std::invalid_argument(
-            "trabajos_maximos debe estar entre " +
-            std::to_string(MIN_TRABAJOS_MAXIMOS) + " y " +
-            std::to_string(MAX_TRABAJOS_MAXIMOS) + "."
+            clave + " debe estar entre " +
+            std::to_string(minimo) + " y " +
+            std::to_string(maximo) + "."
+        );
+    }
+}
+
+} // namespace
+
+void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
+    // Se valida todo antes de abrir el archivo: si una de las claves está fuera
+    // de rango, no se escribe ninguna.
+    if (cambios.trabajosMaximos) {
+        validarRango(
+            cambios.valorTrabajosMaximos,
+            MIN_TRABAJOS_MAXIMOS,
+            MAX_TRABAJOS_MAXIMOS,
+            "trabajos_maximos"
+        );
+    }
+
+    if (cambios.maxCola) {
+        validarRango(
+            cambios.valorMaxCola,
+            MIN_MAX_COLA,
+            MAX_MAX_COLA,
+            "max_cola"
         );
     }
 
     BloqueoConfiguracion bloqueo;
     const std::string ruta = rutaDatos("config.json");
     std::ifstream archivo(ruta);
+    json datos = json::object();
 
-    if (!archivo.is_open()) {
+    if (archivo.is_open()) {
+        try {
+            archivo >> datos;
+        } catch (const std::exception& error) {
+            throw std::runtime_error(
+                std::string("No se pudo interpretar config.json: ") +
+                error.what()
+            );
+        }
+
+        if (!datos.is_object()) {
+            throw std::runtime_error(
+                "config.json debe contener un objeto JSON."
+            );
+        }
+    } else if (std::filesystem::exists(ruta)) {
+        // El archivo existe pero no se puede leer: no se sobrescribe.
         throw std::runtime_error("No se pudo abrir config.json");
     }
 
-    json datos;
-    try {
-        archivo >> datos;
-    } catch (const std::exception& error) {
-        throw std::runtime_error(
-            std::string("No se pudo interpretar config.json: ") +
-            error.what()
-        );
+    if (cambios.trabajosMaximos) {
+        datos["trabajos_maximos"] = cambios.valorTrabajosMaximos;
     }
 
-    if (!datos.is_object()) {
-        throw std::runtime_error(
-            "config.json debe contener un objeto JSON."
-        );
+    if (cambios.maxCola) {
+        datos["max_cola"] = cambios.valorMaxCola;
     }
 
-    datos["trabajos_maximos"] = trabajosMaximos;
     guardarAtomico(ruta, datos);
 
-    EventLog::log_event_system(
-        EventLevel::INFO,
-        "Configuración actualizada",
-        {
-            {"clave", "trabajos_maximos"},
-            {"valor", trabajosMaximos}
-        }
-    );
+    if (cambios.trabajosMaximos) {
+        EventLog::log_event_system(
+            EventLevel::INFO,
+            "Configuración actualizada",
+            {
+                {"clave", "trabajos_maximos"},
+                {"valor", cambios.valorTrabajosMaximos}
+            }
+        );
+    }
+
+    if (cambios.maxCola) {
+        EventLog::log_event_system(
+            EventLevel::INFO,
+            "Configuración actualizada",
+            {
+                {"clave", "max_cola"},
+                {"valor", cambios.valorMaxCola}
+            }
+        );
+    }
+}
+
+void establecerTrabajosMaximos(int trabajosMaximos) {
+    CambiosConfiguracion cambios;
+    cambios.trabajosMaximos = true;
+    cambios.valorTrabajosMaximos = trabajosMaximos;
+    actualizarConfiguracion(cambios);
+}
+
+void establecerMaxCola(int maxCola) {
+    CambiosConfiguracion cambios;
+    cambios.maxCola = true;
+    cambios.valorMaxCola = maxCola;
+    actualizarConfiguracion(cambios);
 }
 
 } // namespace hermes

@@ -34,4 +34,6 @@ ResultadoValidacion validarStatusTexto(const string& status);
 
 ResultadoValidacion validarTrabajosMaximosTexto(const string& texto);
 
+ResultadoValidacion validarMaxColaTexto(const string& texto);
+
 #endif
