@@ -23,6 +23,7 @@ int mostrarAyuda() {
     cout << "  configmax <N>                  Configura el máximo de trabajos simultáneos (1-64)" << endl;
     cout << "  configmax --cola <M>           Configura los cupos de espera en cola (0-256)" << endl;
     cout << "  configmax <N> --cola <M>       Configura ambos valores en una sola operación" << endl;
+    cout << "  red start                      Inicia escucha TCP en primer plano; Ctrl+C detiene" << endl;
     cout << "  logs                           Muestra la bitácora de eventos" << endl;
     cout << "  --version                      Muestra la version" << endl;
     cout << "  --help                         Muestra esta ayuda" << endl;

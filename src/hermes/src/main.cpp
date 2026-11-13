@@ -13,6 +13,7 @@
 #include "clean.h"
 #include "event_log.h"
 #include "config.h"
+#include "network.h"
 
 #include <thread>
 #include <chrono>
@@ -37,6 +38,14 @@ int main(int argc, char* argv[]) {
     if (!rc.esValido) {
         error(rc.mensaje);
         return 1;
+    }
+
+    if (comando == "red") {
+        if (argc != 3 || string(argv[2]) != "start") {
+            error("Uso: hermes red start (primer plano; Ctrl+C para detener)");
+            return 1;
+        }
+        return hermes::iniciarServidorRed();
     }
 
     if (comando == "--version") {
