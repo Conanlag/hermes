@@ -3,6 +3,8 @@
 #include "event_log.h"
 
 #include <fstream>
+#include <arpa/inet.h>
+#include <algorithm>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -10,10 +12,22 @@ using json = nlohmann::json;
 
 namespace hermes {
 
+bool interfazValida(const std::string& interfaz) {
+    in_addr direccion{};
+    return interfaz.find('\0') == std::string::npos &&
+        inet_pton(AF_INET, interfaz.c_str(), &direccion) == 1;
+}
+
+bool directorioDatosValido(const std::string& directorio) {
+    return !directorio.empty() && directorio.find('\0') == std::string::npos &&
+        std::filesystem::path(directorio).is_absolute();
+}
+
 ConfiguracionSistema cargarConfiguracion() {
     ConfiguracionSistema config;
 
-    const std::string ruta = rutaDatos("config.json");
+    config.directorioDatos = directorioDatosConfigurado();
+    const std::string ruta = rutaConfiguracion();
     std::ifstream archivo(ruta);
 
     if (!archivo.is_open()) {
@@ -57,85 +71,38 @@ ConfiguracionSistema cargarConfiguracion() {
         return config;
     }
 
-    if (!datos.contains("trabajos_maximos") ||
-        !datos["trabajos_maximos"].is_number_integer()) {
-        EventLog::log_event_system(
-            EventLevel::WARN,
-            "Llave 'trabajos_maximos' ausente o no entera en config.json",
-            {
-                {"archivo", ruta},
-                {"trabajos_maximos", config.trabajosMaximos}
-            }
-        );
-        return config;
+    auto advertir = [&](const std::string& clave) {
+        EventLog::log_event_system(EventLevel::WARN,
+            "Valor inválido en config.json; se utiliza el valor por defecto",
+            {{"archivo", ruta}, {"clave", clave}});
+    };
+    auto entero = [&](const char* clave, int minimo, int maximo, int& destino, bool ajustar) {
+        if (!datos.contains(clave)) return;
+        const auto& valor = datos[clave];
+        if (!valor.is_number_integer()) { advertir(clave); return; }
+        // Comparar antes de convertir evita desbordamientos de enteros JSON.
+        if (valor < minimo) {
+            advertir(clave);
+            if (ajustar) destino = minimo;
+        } else if (valor > maximo) {
+            advertir(clave);
+            if (ajustar) destino = maximo;
+        } else destino = valor.get<int>();
+    };
+    entero("trabajos_maximos", MIN_TRABAJOS_MAXIMOS, MAX_TRABAJOS_MAXIMOS,
+           config.trabajosMaximos, true);
+    entero("puerto", 1, 65535, config.puerto, false);
+    if (datos.contains("interfaz")) {
+        if (datos["interfaz"].is_string() && interfazValida(datos["interfaz"].get<std::string>()))
+            config.interfaz = datos["interfaz"].get<std::string>();
+        else advertir("interfaz");
     }
+    if (datos.contains("directorio_datos") &&
+        (!datos["directorio_datos"].is_string() ||
+         !directorioDatosValido(datos["directorio_datos"].get<std::string>())))
+        advertir("directorio_datos");
 
-    const int valor = datos["trabajos_maximos"].get<int>();
-
-    if (valor < MIN_TRABAJOS_MAXIMOS) {
-        EventLog::log_event_system(
-            EventLevel::WARN,
-            "Valor de 'trabajos_maximos' inferior al mínimo permitido; ajustando al límite inferior",
-            {
-                {"valor_leido", valor},
-                {"valor_ajustado", MIN_TRABAJOS_MAXIMOS}
-            }
-        );
-        config.trabajosMaximos = MIN_TRABAJOS_MAXIMOS;
-    } else if (valor > MAX_TRABAJOS_MAXIMOS) {
-        EventLog::log_event_system(
-            EventLevel::WARN,
-            "Valor de 'trabajos_maximos' superior al límite seguro; ajustando al límite superior",
-            {
-                {"valor_leido", valor},
-                {"valor_ajustado", MAX_TRABAJOS_MAXIMOS}
-            }
-        );
-        config.trabajosMaximos = MAX_TRABAJOS_MAXIMOS;
-    } else {
-        config.trabajosMaximos = valor;
-    }
-
-    // `max_cola` es opcional: su ausencia conserva la política histórica de no
-    // admitir Jobs en espera.
-    if (datos.contains("max_cola")) {
-        if (!datos["max_cola"].is_number_integer()) {
-            EventLog::log_event_system(
-                EventLevel::WARN,
-                "Llave 'max_cola' no entera en config.json; se utiliza el valor por defecto",
-                {
-                    {"archivo", ruta},
-                    {"max_cola", config.maxCola}
-                }
-            );
-        } else {
-            const int cola = datos["max_cola"].get<int>();
-
-            if (cola < MIN_MAX_COLA) {
-                EventLog::log_event_system(
-                    EventLevel::WARN,
-                    "Valor de 'max_cola' inferior al mínimo permitido; ajustando al límite inferior",
-                    {
-                        {"valor_leido", cola},
-                        {"valor_ajustado", MIN_MAX_COLA}
-                    }
-                );
-                config.maxCola = MIN_MAX_COLA;
-            } else if (cola > MAX_MAX_COLA) {
-                EventLog::log_event_system(
-                    EventLevel::WARN,
-                    "Valor de 'max_cola' superior al límite seguro; ajustando al límite superior",
-                    {
-                        {"valor_leido", cola},
-                        {"valor_ajustado", MAX_MAX_COLA}
-                    }
-                );
-                config.maxCola = MAX_MAX_COLA;
-            } else {
-                config.maxCola = cola;
-            }
-        }
-    }
+    entero("max_cola", MIN_MAX_COLA, MAX_MAX_COLA, config.maxCola, true);
 
     return config;
 }

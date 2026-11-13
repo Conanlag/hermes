@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <string>
+
 namespace hermes {
 
 constexpr int DEFAULT_TRABAJOS_MAXIMOS = 5;
@@ -17,14 +19,21 @@ constexpr int MAX_MAX_COLA = 256;
 struct ConfiguracionSistema {
     int trabajosMaximos = DEFAULT_TRABAJOS_MAXIMOS;
     int maxCola = DEFAULT_MAX_COLA;
+    std::string directorioDatos;
+    std::string interfaz = "127.0.0.1";
+    int puerto = 45820;
 };
 
 /**
  * Lee config.json de manera tolerante a fallos.
- * Si el archivo falta, está corrupto o tiene valores fuera de rango,
- * registra una advertencia en EventLog y retorna una configuración segura por defecto.
+ * Los campos ausentes usan sus valores predeterminados. Los inválidos generan
+ * advertencias; concurrencia y cola se ajustan a sus límites históricos.
  */
 ConfiguracionSistema cargarConfiguracion();
+
+// Validación compartida por lectura tolerante y actualización estricta.
+bool interfazValida(const std::string& interfaz);
+bool directorioDatosValido(const std::string& directorio);
 
 /**
  * Actualiza y persiste de forma atómica las claves de config.json indicadas
@@ -36,6 +45,12 @@ ConfiguracionSistema cargarConfiguracion();
  * @throws std::runtime_error si la configuración no se puede leer o guardar.
  */
 struct CambiosConfiguracion {
+    bool directorioDatos = false;
+    std::string valorDirectorioDatos;
+    bool interfaz = false;
+    std::string valorInterfaz;
+    bool puerto = false;
+    int valorPuerto = 45820;
     bool trabajosMaximos = false;
     int valorTrabajosMaximos = 0;
     bool maxCola = false;

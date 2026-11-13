@@ -24,7 +24,7 @@ using json = nlohmann::json;
 class BloqueoConfiguracion {
 public:
     BloqueoConfiguracion() {
-        const std::string ruta = hermes::rutaDatos("config.lock");
+        const std::string ruta = hermes::rutaConfiguracion("config.lock");
         descriptor = open(
             ruta.c_str(),
             O_RDWR | O_CREAT | O_CLOEXEC,
@@ -223,8 +223,14 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
         );
     }
 
+    if (cambios.puerto) validarRango(cambios.valorPuerto, 1, 65535, "puerto");
+    if (cambios.interfaz && !interfazValida(cambios.valorInterfaz))
+        throw std::invalid_argument("interfaz debe ser una dirección IPv4 literal.");
+    if (cambios.directorioDatos && !directorioDatosValido(cambios.valorDirectorioDatos))
+        throw std::invalid_argument("directorio_datos debe ser una ruta absoluta.");
+
     BloqueoConfiguracion bloqueo;
-    const std::string ruta = rutaDatos("config.json");
+    const std::string ruta = rutaConfiguracion();
     std::ifstream archivo(ruta);
     json datos = json::object();
 
@@ -256,6 +262,9 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
         datos["max_cola"] = cambios.valorMaxCola;
     }
 
+    if (cambios.directorioDatos) datos["directorio_datos"] = cambios.valorDirectorioDatos;
+    if (cambios.interfaz) datos["interfaz"] = cambios.valorInterfaz;
+    if (cambios.puerto) datos["puerto"] = cambios.valorPuerto;
     guardarAtomico(ruta, datos);
 
     if (cambios.trabajosMaximos) {
