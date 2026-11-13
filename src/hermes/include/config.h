@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include <string>
+#include <vector>
 
 namespace hermes {
 
@@ -22,6 +23,8 @@ struct ConfiguracionSistema {
     std::string directorioDatos;
     std::string interfaz = "127.0.0.1";
     int puerto = 45820;
+    std::vector<std::string> redesPermitidas = {"127.0.0.0/8"};
+    bool reglasRedValidas = true;
 };
 
 /**
@@ -45,6 +48,8 @@ bool directorioDatosValido(const std::string& directorio);
  * @throws std::runtime_error si la configuración no se puede leer o guardar.
  */
 struct CambiosConfiguracion {
+    bool redesPermitidas = false;
+    std::vector<std::string> valorRedesPermitidas;
     bool directorioDatos = false;
     std::string valorDirectorioDatos;
     bool interfaz = false;

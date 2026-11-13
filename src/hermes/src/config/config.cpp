@@ -1,4 +1,5 @@
 #include "config.h"
+#include "network_access.h"
 #include "data_paths.h"
 #include "event_log.h"
 
@@ -101,6 +102,27 @@ ConfiguracionSistema cargarConfiguracion() {
         (!datos["directorio_datos"].is_string() ||
          !directorioDatosValido(datos["directorio_datos"].get<std::string>())))
         advertir("directorio_datos");
+
+    if (datos.contains("redes_permitidas")) {
+        const auto& reglas = datos["redes_permitidas"];
+        config.redesPermitidas.clear();
+        config.reglasRedValidas = reglas.is_array();
+        if (reglas.is_array()) {
+            for (const auto& regla : reglas) {
+                if (!regla.is_string() || !reglaRedValida(regla.get<std::string>())) {
+                    config.reglasRedValidas = false;
+                    break;
+                }
+                config.redesPermitidas.push_back(regla.get<std::string>());
+            }
+        }
+        if (!config.reglasRedValidas) {
+            config.redesPermitidas.clear();
+            EventLog::log_event_system(EventLevel::WARN,
+                "redes_permitidas inválida; se deniega el acceso de red",
+                {{"archivo", ruta}});
+        }
+    }
 
     entero("max_cola", MIN_MAX_COLA, MAX_MAX_COLA, config.maxCola, true);
 

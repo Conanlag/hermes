@@ -1,5 +1,6 @@
 #include "network.h"
 #include "config.h"
+#include "network_access.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -54,6 +55,8 @@ namespace hermes {
 int iniciarServidorRed() {
     try {
         const auto config = cargarConfiguracion();
+        if (!config.reglasRedValidas)
+            throw std::runtime_error("redes_permitidas inválida; corrija config.json antes de iniciar");
         sockaddr_in direccion{};
         direccion.sin_family = AF_INET;
         direccion.sin_port = htons(static_cast<unsigned short>(config.puerto));
@@ -87,11 +90,20 @@ int iniciarServidorRed() {
             if (evento.revents & (POLLERR | POLLHUP | POLLNVAL))
                 throw std::runtime_error("Error en el socket de escucha");
             if (!(evento.revents & POLLIN)) continue;
-            Descriptor cliente(accept4(servidor.valor, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK));
+            sockaddr_in origen{};
+            socklen_t longitud = sizeof(origen);
+            Descriptor cliente(accept4(servidor.valor, reinterpret_cast<sockaddr*>(&origen),
+                                        &longitud, SOCK_CLOEXEC | SOCK_NONBLOCK));
             if (cliente.valor < 0) {
                 if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK || errno == ECONNABORTED)
                     continue;
                 fallo("accept");
+            }
+            char ip[INET_ADDRSTRLEN]{};
+            if (!inet_ntop(AF_INET, &origen.sin_addr, ip, sizeof(ip)) ||
+                !origenRedPermitido(ip, config.redesPermitidas)) {
+                // Cierre antes de leer solicitudes o enviar información del servicio.
+                continue;
             }
             // MSG_NOSIGNAL impide que un cliente desconectado termine el servicio.
             // El diagnóstico es informativo: no se garantiza su entrega completa.

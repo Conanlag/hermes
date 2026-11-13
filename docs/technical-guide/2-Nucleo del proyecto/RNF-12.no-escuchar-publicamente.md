@@ -27,8 +27,9 @@ Los otros equipos conectan a esa dirección y puerto. La configuración se lee a
 arrancar; para cambiarla hay que detener y volver a iniciar el servicio.
 
 `0.0.0.0`, si se configura explícitamente, escucha en todas las interfaces IPv4.
-No equivale a restringir acceso a LAN/VPN. RNF-13 y RF-20 implementarán la
-validación de direcciones de origen; esta entrega solo cubre RNF-12 y la base TCP.
+No equivale a restringir acceso a LAN/VPN. [RNF-13](RNF-13.acceso-remoto-LAN-VPN.md) define los espacios admitidos y
+[RF-20](RF-20.restriccion-redes-direcciones.md) aplica la lista de orígenes
+autorizados mediante `redes_permitidas`.
 El firewall y la topología del entorno pueden impedir el acceso desde otro equipo.
 
 ## Alcance del diagnóstico TCP

@@ -1,4 +1,5 @@
 #include "config.h"
+#include "network_access.h"
 
 #include "data_paths.h"
 #include "event_log.h"
@@ -229,6 +230,12 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
     if (cambios.directorioDatos && !directorioDatosValido(cambios.valorDirectorioDatos))
         throw std::invalid_argument("directorio_datos debe ser una ruta absoluta.");
 
+    if (cambios.redesPermitidas) {
+        for (const auto& regla : cambios.valorRedesPermitidas)
+            if (!reglaRedValida(regla))
+                throw std::invalid_argument("redes_permitidas contiene una IP o red no permitida.");
+    }
+
     BloqueoConfiguracion bloqueo;
     const std::string ruta = rutaConfiguracion();
     std::ifstream archivo(ruta);
@@ -265,6 +272,7 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
     if (cambios.directorioDatos) datos["directorio_datos"] = cambios.valorDirectorioDatos;
     if (cambios.interfaz) datos["interfaz"] = cambios.valorInterfaz;
     if (cambios.puerto) datos["puerto"] = cambios.valorPuerto;
+    if (cambios.redesPermitidas) datos["redes_permitidas"] = cambios.valorRedesPermitidas;
     guardarAtomico(ruta, datos);
 
     if (cambios.trabajosMaximos) {
