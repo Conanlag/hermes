@@ -1,5 +1,6 @@
 # Compilacion
 /src/hermes/hermes
+/src/hermes/.env
 
 #Pruebas archivos
 /src/hermes/isa.py
