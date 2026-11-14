@@ -21,14 +21,11 @@ inline std::filesystem::path directorioDatosPredeterminado() {
 
 inline std::string rutaConfiguracion(const std::string& nombre = "config.json") {
     namespace fs = std::filesystem;
-    const fs::path anterior = directorioDatosPredeterminado() / "config.json";
+    (void)directorioDatosPredeterminado(); // Validar HOME antes de construir rutas.
     const char* xdg = std::getenv("XDG_CONFIG_HOME");
     const fs::path base = xdg && fs::path(xdg).is_absolute()
         ? fs::path(xdg) : fs::path(std::getenv("HOME")) / ".config";
     const fs::path actual = base / "hermes";
-    // Las instalaciones anteriores mantienen su archivo hasta migrarlo explícitamente.
-    if (!fs::exists(actual / "config.json") && fs::exists(anterior))
-        return (anterior.parent_path() / nombre).string();
     fs::create_directories(actual);
     return (actual / nombre).string();
 }

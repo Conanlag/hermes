@@ -26,6 +26,14 @@ using namespace std::chrono;
 
 
 int main(int argc, char* argv[]) {
+    try {
+        hermes::inicializarConfiguracion();
+    } catch (const std::exception& e) {
+        error("No se pudo inicializar la configuración: ", e.what());
+        return 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--init-config") return 0;
+
 
     if (argc < 2) {
         cout << "HERMES " << endl;

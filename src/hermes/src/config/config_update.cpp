@@ -203,6 +203,28 @@ void validarRango(
 
 } // namespace
 
+void inicializarConfiguracion() {
+    BloqueoConfiguracion bloqueo;
+    const std::string ruta = rutaConfiguracion();
+    if (std::filesystem::exists(ruta)) return;
+    json datos = {
+        {"directorio_datos", directorioDatosPredeterminado().string()},
+        {"trabajos_maximos", DEFAULT_TRABAJOS_MAXIMOS},
+        {"max_cola", DEFAULT_MAX_COLA},
+        {"interfaz", "127.0.0.1"},
+        {"puerto", 45820}
+    };
+    const auto anterior = directorioDatosPredeterminado() / "config.json";
+    if (std::filesystem::exists(anterior)) {
+        std::ifstream archivo(anterior);
+        json legado;
+        if (!archivo || !(archivo >> legado) || !legado.is_object())
+            throw std::runtime_error("No se pudo migrar la configuración antigua; revise config.json");
+        for (auto it = legado.begin(); it != legado.end(); ++it) datos[it.key()] = it.value();
+    }
+    guardarAtomico(ruta, datos);
+}
+
 void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
     // Se valida todo antes de abrir el archivo: si una de las claves está fuera
     // de rango, no se escribe ninguna.

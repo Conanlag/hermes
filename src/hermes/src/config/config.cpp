@@ -25,6 +25,7 @@ bool directorioDatosValido(const std::string& directorio) {
 }
 
 ConfiguracionSistema cargarConfiguracion() {
+    inicializarConfiguracion();
     ConfiguracionSistema config;
 
     config.directorioDatos = directorioDatosConfigurado();

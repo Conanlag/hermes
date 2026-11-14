@@ -32,6 +32,8 @@ struct ConfiguracionSistema {
  * Los campos ausentes usan sus valores predeterminados. Los inválidos generan
  * advertencias; concurrencia y cola se ajustan a sus límites históricos.
  */
+// Crea config.json y config.lock si faltan, sin sobrescribir valores existentes.
+void inicializarConfiguracion();
 ConfiguracionSistema cargarConfiguracion();
 
 // Validación compartida por lectura tolerante y actualización estricta.
