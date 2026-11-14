@@ -419,3 +419,21 @@ hermes filter id 1
 ```
 
 De esta manera se puede crear, consultar y cancelar un Job utilizando las funcionalidades disponibles actualmente en Hermes.
+
+---
+
+# 9. Hermes Red: PC A y PC B con WSL
+
+PC A puede recibir trabajos de PC B y ejecutarlos con su scheduler local,
+conservando la semántica de `job`, `filter` y `cancel`. El cliente no necesita
+certificados ni iniciar su propio servidor de red.
+
+La [guía completa de configuración y diagnóstico PC A / PC B](red-wsl-pc-a-pc-b.md)
+incluye los JSON completos, el reenvío de puertos de Windows hacia WSL, la
+creación y corrección de reglas del firewall y las pruebas desde ambos equipos.
+Utiliza las direcciones del caso comprobado: Windows de A `192.168.1.74`, WSL de
+A `172.25.70.19`, gateway de A `172.25.64.1` y Windows de B `192.168.1.73`.
+
+También documenta el bloqueo real causado por autorizar `192.168.1.7` en el
+firewall en lugar de `192.168.1.73`, las comprobaciones que lo localizaron y el
+comando exacto con el que se resolvió.
