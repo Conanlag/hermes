@@ -116,6 +116,32 @@ inline std::string rutaDatos(const std::string& nombreArchivo) {
     ).string();
 }
 
+// Solo en una copia de desarrollo: el binario instalado no crea enlaces
+// dentro de ~/.local/bin. Git conserva los dos enlaces; cada copia los adapta
+// al usuario y al directorio de datos efectivo al ejecutar Hermes.
+inline void actualizarEnlacesDesarrollo() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const auto ejecutable = fs::read_symlink("/proc/self/exe", ec);
+    if (ec) return;
+    const auto proyecto = ejecutable.parent_path();
+    if (!fs::is_regular_file(proyecto / "Makefile") ||
+        !fs::is_directory(proyecto / "include") || !fs::is_directory(proyecto / "src")) return;
+    const auto enlazar = [](const fs::path& enlace, const fs::path& destino) {
+        const auto estado = fs::symlink_status(enlace);
+        if (fs::is_symlink(estado)) {
+            if (fs::read_symlink(enlace) == destino) return;
+            // Solo se elimina el enlace, nunca se recorre su destino.
+            fs::remove(enlace);
+        } else if (fs::exists(estado)) {
+            throw std::runtime_error("Se conserva la ruta existente porque no es un enlace: " + enlace.string());
+        }
+        fs::create_directory_symlink(destino, enlace);
+    };
+    enlazar(proyecto / "data", fs::path(rutaDatos("jobs.json")).parent_path());
+    enlazar(proyecto / "config", fs::path(rutaConfiguracion()).parent_path());
+}
+
 inline std::string rutaEventsLog() {
     return rutaDatos("events.jsonl");
 }

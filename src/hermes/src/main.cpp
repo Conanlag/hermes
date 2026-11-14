@@ -14,6 +14,7 @@
 #include "clean.h"
 #include "event_log.h"
 #include "config.h"
+#include "data_paths.h"
 #include "network.h"
 
 #include <thread>
@@ -28,11 +29,12 @@ using namespace std::chrono;
 int main(int argc, char* argv[]) {
     try {
         hermes::inicializarConfiguracion();
+        (void)hermes::rutaDatos("jobs.json");
+        if (argc == 1) hermes::actualizarEnlacesDesarrollo();
     } catch (const std::exception& e) {
         error("No se pudo inicializar la configuración: ", e.what());
         return 1;
     }
-    if (argc == 2 && std::string(argv[1]) == "--init-config") return 0;
 
 
     if (argc < 2) {
