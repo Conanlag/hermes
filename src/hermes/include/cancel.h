@@ -34,7 +34,11 @@ bool cancelarJob(unsigned int jobId);
  * - RUNNING → SOLICITUD_REGISTRADA (el supervisor confirma).
  * - Otro estado → NO_CANCELABLE con el estado actual.
  * - ID ausente → NO_EXISTE. Fallo de archivo → ERROR_LECTURA.
+ *
+ * propietarioRemoto no vacío limita la operación al propietario indicado
+ * dentro de la misma transacción. Las señales las entrega el supervisor
+ * para no bloquear el transporte; las transiciones son las mismas.
  */
-ResultadoCancelacion cancelarJobDetallado(unsigned int jobId);
+ResultadoCancelacion cancelarJobDetallado(unsigned int jobId, const string& propietarioRemoto = "");
 
 #endif

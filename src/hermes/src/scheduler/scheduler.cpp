@@ -819,8 +819,44 @@ void persistirInterrumpidosPorApagado(
     }
 }
 
+// Las solicitudes remotas solo persisten la intención de cancelar. El
+// supervisor dueño de los procesos entrega y escala las señales sin bloquear
+// el bucle TCP ni marcar CANCELED antes de recoger al hijo.
+void atenderCancelacionesRemotas(std::map<unsigned int, steady_clock::time_point>& plazos) {
+    try {
+        const json jobs = leerJobsSeguros();
+        std::lock_guard<std::mutex> bloqueo(mutexActivos);
+        for (auto it = plazos.begin(); it != plazos.end();) {
+            if (activos.find(it->first) == activos.end()) it = plazos.erase(it);
+            else ++it;
+        }
+        for (const auto& job : jobs) {
+            if (job.value("propietario_remoto", string{}).empty() ||
+                !job.value("cancel_requested", false) || job.value("status", string{}) != "RUNNING") continue;
+            const unsigned int id = job.at("job_id").get<unsigned int>();
+            const auto activo = activos.find(id);
+            if (activo == activos.end()) continue;
+            const auto plazo = plazos.find(id);
+            if (plazo == plazos.end()) {
+                senalizarTrabajoActivo(activo->second, SIGTERM);
+                plazos.emplace(id, steady_clock::now() + seconds(5));
+            } else if (steady_clock::now() >= plazo->second) {
+                senalizarTrabajoActivo(activo->second, SIGKILL);
+            }
+        }
+    } catch (...) {
+        // Un fallo de lectura no termina el supervisor; se reintenta.
+    }
+}
+
 void coordinarApagado() {
+    std::map<unsigned int, steady_clock::time_point> cancelaciones;
+    auto proximaRevision = steady_clock::now();
     while (banderaApagado == 0) {
+        if (steady_clock::now() >= proximaRevision) {
+            atenderCancelacionesRemotas(cancelaciones);
+            proximaRevision = steady_clock::now() + milliseconds(200);
+        }
         sleep_for(milliseconds(50));
     }
 

@@ -1,6 +1,12 @@
 #include "network.h"
 #include "config.h"
 #include "network_access.h"
+#include "network_protocol.h"
+#include "scheduler.h"
+#include <chrono>
+#include <memory>
+#include <vector>
+#include <algorithm>
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -37,13 +43,22 @@ public:
             sigaction(SIGINT, &anteriorInt, nullptr);
             throw std::runtime_error("No se pudo instalar SIGTERM");
         }
+        struct sigaction ignorar{};
+        ignorar.sa_handler = SIG_IGN;
+        sigemptyset(&ignorar.sa_mask);
+        if (sigaction(SIGPIPE, &ignorar, &anteriorPipe) == -1) {
+            sigaction(SIGINT, &anteriorInt, nullptr);
+            sigaction(SIGTERM, &anteriorTerm, nullptr);
+            throw std::runtime_error("No se pudo instalar SIGPIPE");
+        }
     }
     ~Senales() {
         sigaction(SIGINT, &anteriorInt, nullptr);
         sigaction(SIGTERM, &anteriorTerm, nullptr);
+        sigaction(SIGPIPE, &anteriorPipe, nullptr);
     }
 private:
-    struct sigaction anteriorInt{}, anteriorTerm{};
+    struct sigaction anteriorInt{}, anteriorTerm{}, anteriorPipe{};
 };
 
 void fallo(const char* operacion) {
@@ -57,6 +72,11 @@ int iniciarServidorRed() {
         const auto config = cargarConfiguracion();
         if (!config.reglasRedValidas)
             throw std::runtime_error("redes_permitidas inválida; corrija config.json antes de iniciar");
+        const auto remota = cargarConfiguracionRemota();
+        if (remota.habilitada) {
+            // Antes de abrir sockets: el daemon no debe heredar conexiones TCP.
+            iniciarSchedulerSiNecesario(config.trabajosMaximos);
+        }
         sockaddr_in direccion{};
         direccion.sin_family = AF_INET;
         direccion.sin_port = htons(static_cast<unsigned short>(config.puerto));
@@ -76,38 +96,98 @@ int iniciarServidorRed() {
         Senales senales;
         std::cout << "Hermes Red escuchando en " << config.interfaz << ':' << config.puerto
                   << " (primer plano; Ctrl+C para detener)" << std::endl;
-        // Esta fase prueba la escucha; no recibe ni ejecuta instrucciones remotas.
-        // Cada conexión recibe un diagnóstico acotado y se cierra sin bloquear.
-        constexpr char respuesta[] =
-            "{\"version\":1,\"ok\":false,\"error\":\"REMOTE_OPERATIONS_UNAVAILABLE\"}\n";
+        using Reloj = std::chrono::steady_clock;
+        struct Cliente {
+            explicit Cliente(int fd) : socket(fd), limite(Reloj::now() + std::chrono::seconds(3)) {}
+            Descriptor socket;
+            short esperado = POLLIN;
+            std::string identidad;
+            const PermisosRemotos* permisos = nullptr;
+            std::string entrada, salida;
+            std::size_t enviado = 0;
+            Reloj::time_point limite;
+            bool cerrado = false;
+        };
+        std::vector<std::unique_ptr<Cliente>> clientes;
         while (!detener) {
-            pollfd evento{servidor.valor, POLLIN, 0};
-            const int resultado = poll(&evento, 1, 500);
+            std::vector<pollfd> eventos{{servidor.valor, POLLIN, 0}};
+            for (const auto& cliente : clientes)
+                eventos.push_back({cliente->socket.valor,
+                    cliente->esperado, 0});
+            const int resultado = poll(eventos.data(), eventos.size(), 100);
             if (resultado < 0) {
                 if (errno == EINTR) continue;
                 fallo("poll");
             }
-            if (evento.revents & (POLLERR | POLLHUP | POLLNVAL))
+            if (eventos[0].revents & (POLLERR | POLLHUP | POLLNVAL))
                 throw std::runtime_error("Error en el socket de escucha");
-            if (!(evento.revents & POLLIN)) continue;
-            sockaddr_in origen{};
-            socklen_t longitud = sizeof(origen);
-            Descriptor cliente(accept4(servidor.valor, reinterpret_cast<sockaddr*>(&origen),
-                                        &longitud, SOCK_CLOEXEC | SOCK_NONBLOCK));
-            if (cliente.valor < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK || errno == ECONNABORTED)
+            auto responder = [](Cliente& cliente, std::string respuesta) {
+                cliente.salida = std::move(respuesta);
+                cliente.esperado = POLLOUT;
+                cliente.limite = Reloj::now() + std::chrono::seconds(3);
+            };
+            for (std::size_t i = 0; i < clientes.size(); ++i) {
+                auto& cliente = *clientes[i];
+                const auto evento = eventos[i + 1].revents;
+                if (evento & (POLLERR | POLLNVAL)) { cliente.cerrado = true; continue; }
+                if (cliente.salida.empty() && (evento & (cliente.esperado | POLLHUP))) {
+                    char buffer[4096];
+                    const auto leidos = recv(cliente.socket.valor, buffer, sizeof(buffer), 0);
+                    if (leidos > 0) {
+                        cliente.entrada.append(buffer, static_cast<std::size_t>(leidos));
+                        const auto fin = cliente.entrada.find('\n');
+                        if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
+                            (fin != std::string::npos && fin > MAX_MENSAJE_RED))
+                            responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
+                        else if (fin != std::string::npos)
+                            responder(cliente, procesarSolicitudRed(cliente.entrada.substr(0, fin), cliente.identidad, cliente.permisos));
+                    } else if (leidos == 0) {
+                        responder(cliente, errorProtocolo("INCOMPLETE_MESSAGE"));
+                    } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)
+                        cliente.cerrado = true;
+                }
+                if (!cliente.salida.empty() && (evento & cliente.esperado)) {
+                    const auto enviados = send(cliente.socket.valor,
+                        cliente.salida.data() + cliente.enviado,
+                        cliente.salida.size() - cliente.enviado, MSG_NOSIGNAL);
+                    if (enviados > 0) {
+                        cliente.enviado += static_cast<std::size_t>(enviados);
+                        if (cliente.enviado == cliente.salida.size()) cliente.cerrado = true;
+                    } else if (enviados == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK))
+                        cliente.cerrado = true;
+                }
+                if (Reloj::now() >= cliente.limite) {
+                    if (cliente.salida.empty()) responder(cliente, errorProtocolo("REQUEST_TIMEOUT"));
+                    else cliente.cerrado = true;
+                }
+            }
+            clientes.erase(std::remove_if(clientes.begin(), clientes.end(),
+                [](const auto& cliente) { return cliente->cerrado; }), clientes.end());
+            if (eventos[0].revents & POLLIN) {
+                sockaddr_in origen{};
+                socklen_t longitud = sizeof(origen);
+                Descriptor conexion(accept4(servidor.valor, reinterpret_cast<sockaddr*>(&origen),
+                                           &longitud, SOCK_CLOEXEC | SOCK_NONBLOCK));
+                if (conexion.valor < 0) {
+                    if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK || errno == ECONNABORTED)
+                        continue;
+                    fallo("accept");
+                }
+                char ip[INET_ADDRSTRLEN]{};
+                if (!inet_ntop(AF_INET, &origen.sin_addr, ip, sizeof(ip)) ||
+                    !origenRedPermitido(ip, config.redesPermitidas) || clientes.size() >= 32)
                     continue;
-                fallo("accept");
+                auto cliente = std::make_unique<Cliente>(conexion.valor);
+                conexion.valor = -1;
+                if (remota.habilitada) {
+                    const auto identidad = remota.identidades.find(ip);
+                    if (identidad != remota.identidades.end()) {
+                        cliente->identidad = "tcp-" + identidad->second;
+                        cliente->permisos = &remota.clientes.at(identidad->second);
+                    }
+                }
+                clientes.push_back(std::move(cliente));
             }
-            char ip[INET_ADDRSTRLEN]{};
-            if (!inet_ntop(AF_INET, &origen.sin_addr, ip, sizeof(ip)) ||
-                !origenRedPermitido(ip, config.redesPermitidas)) {
-                // Cierre antes de leer solicitudes o enviar información del servicio.
-                continue;
-            }
-            // MSG_NOSIGNAL impide que un cliente desconectado termine el servicio.
-            // El diagnóstico es informativo: no se garantiza su entrega completa.
-            (void)send(cliente.valor, respuesta, sizeof(respuesta) - 1, MSG_NOSIGNAL);
         }
         std::cout << "Hermes Red detenido" << std::endl;
         return 0;

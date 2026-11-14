@@ -1,0 +1,11 @@
+{
+    "habilitada": true,
+    "clientes": [
+        {
+            "id": "prueba-local",
+            "direcciones": ["127.0.0.1"],
+            "operaciones": ["submit", "query", "list", "cancel"],
+            "programas": ["true", "false", "sleep", "/usr/bin/true", "/usr/bin/false", "/usr/bin/sleep"]
+        }
+    ]
+}

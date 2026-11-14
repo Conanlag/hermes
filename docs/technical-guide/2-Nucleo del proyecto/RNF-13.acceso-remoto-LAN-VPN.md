@@ -31,8 +31,10 @@ Hermes no identifica automáticamente si una dirección pertenece a una LAN o un
 VPN. El administrador define los rangos; el servidor utiliza la dirección de
 origen observada por TCP, incluido cualquier NAT intermedio.
 
-El filtro de origen no autentica la identidad del nodo. TLS, emparejamiento,
-autorización por operación y ejecución remota siguen pendientes.
+El filtro de origen no autentica la identidad del nodo.
+[RF-18](RF-18.operaciones-remotas.md) utiliza clientes registrados por IP y
+autorización por operación y programa para trabajos procesados en el servidor.
+El emparejamiento y control exclusivo de clientes ejecutores siguen pendientes.
 
 ## Verificación
 

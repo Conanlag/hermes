@@ -4,6 +4,7 @@
 #include "event_log.h"
 
 #include <charconv>
+#include <limits>
 #include <stdexcept>
 
 using namespace std;
@@ -270,6 +271,11 @@ ResultadoValidacion validarIdTexto(
                 textoId +
                 ". Debe ser un numero entero positivo."
             };
+        }
+
+        if (valor > std::numeric_limits<unsigned int>::max()) {
+            return {false, CodigoValidacion::MALFORMADO,
+                    "ID fuera de rango: " + textoId + "."};
         }
 
         // Los IDs de Hermes comienzan en 1.

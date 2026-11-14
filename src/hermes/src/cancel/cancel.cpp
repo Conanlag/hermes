@@ -9,7 +9,7 @@
 using namespace std;
 
 
-ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
+ResultadoCancelacion cancelarJobDetallado(unsigned int jobId, const string& propietarioRemoto) {
     bool encontrado = false;
     bool canceladoEnCola = false;
     bool solicitudRegistrada = false;
@@ -23,6 +23,9 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
                     item["job_id"] != jobId) {
                     continue;
                 }
+
+                if (!propietarioRemoto.empty() &&
+                    item.value("propietario_remoto", string{}) != propietarioRemoto) continue;
 
                 encontrado = true;
                 estado = item.value("status", string{});
@@ -79,7 +82,7 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId) {
     if (solicitudRegistrada) {
         // PID 0 significa que el trabajador todavía no ha guardado
         // el PID. El scheduler detectará la solicitud al guardarlo.
-        if (pid > 0) {
+        if (pid > 0 && propietarioRemoto.empty()) {
             if (!escalarCancelacionProceso(pid, 5)) {
                 hermes::EventLog::log_event(jobId, hermes::EventLevel::ERROR, "Error al escalar cancelación", {
                     {"pid", pid}

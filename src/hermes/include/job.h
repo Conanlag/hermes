@@ -37,11 +37,14 @@ Job crearJob(
     const vector<string>& argumentos,
     const string& requestId = "",
     int trabajosMaximos = 5,
-    int maxCola = 0
+    int maxCola = 0,
+    const string& propietarioRemoto = ""
 );
 
 
 
+
+void esperarInicioJob(Job& job);
 
 bool marcarCancelacionSolicitada(
     unsigned int jobId

@@ -3,6 +3,8 @@
 #include "timestamp.h"
 #include "event_log.h"
 #include <functional>
+#include <thread>
+#include <chrono>
 #include <cstdint>
 #include <climits>
 
@@ -60,7 +62,8 @@ Job crearJob(
     const vector<string>& argumentos,
     const string& requestId,
     int trabajosMaximos,
-    int maxCola
+    int maxCola,
+    const string& propietarioRemoto
 ) {
     if (trabajosMaximos < 1) {
         throw invalid_argument(
@@ -111,7 +114,8 @@ Job crearJob(
                     );
                 }
 
-                if (item.value("programa", string{}) != programa ||
+                if (item.value("propietario_remoto", string{}) != propietarioRemoto ||
+                    item.value("programa", string{}) != programa ||
                     item.value("argumentos", vector<string>{}) != argumentos) {
                     throw runtime_error(
                         "El identificador de solicitud ya fue usado "
@@ -178,6 +182,10 @@ Job crearJob(
         item["tiempo_terminacion"] = "";
         item["codigo_salida"] = -1;
         item["cancel_requested"] = false;
+        if (!propietarioRemoto.empty()) {
+            item["propietario_remoto"] = propietarioRemoto;
+            item["tipo_ejecucion"] = "remote";
+        }
         if (!requestId.empty()) {
             item["request_id"] = requestId;
         }
@@ -294,4 +302,12 @@ bool obtenerJobPorId(unsigned int jobId, Job& jobOut) {
     }
 
     return false;
+}
+void esperarInicioJob(Job& job) {
+    if (job.solicitudDuplicada) return;
+    for (int i = 0; i < 50; ++i) {
+        obtenerJobPorId(job.job_id, job);
+        if (job.pid > 0 || job.status == Status::FAILED) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
 }

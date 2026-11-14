@@ -24,6 +24,11 @@ int mostrarAyuda() {
     cout << "  configmax --cola <M>           Configura los cupos de espera en cola (0-256)" << endl;
     cout << "  configmax <N> --cola <M>       Configura ambos valores en una sola operación" << endl;
     cout << "  red start                      Inicia escucha TCP en primer plano; Ctrl+C detiene" << endl;
+    cout << "  red job <host> [--request-id <id>] <programa> [args...]" << endl;
+    cout << "                                 Envía un trabajo al servidor por TCP LAN/VPN" << endl;
+    cout << "  red filter <host> <id|status|programa> <valor>" << endl;
+    cout << "                                 Aplica los mismos filtros que en modo local" << endl;
+    cout << "  red cancel <host> <id>         Solicita cancelar un trabajo remoto propio" << endl;
     cout << "  logs                           Muestra la bitácora de eventos" << endl;
     cout << "  --version                      Muestra la version" << endl;
     cout << "  --help                         Muestra esta ayuda" << endl;

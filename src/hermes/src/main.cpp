@@ -4,6 +4,7 @@
 // Librerias del proyecto
 #include "version.h"
 #include "job.h"
+#include "job_presentation.h"
 #include "filter.h"
 #include "validator.h"
 #include "terminal.colors.h"
@@ -41,11 +42,8 @@ int main(int argc, char* argv[]) {
     }
 
     if (comando == "red") {
-        if (argc != 3 || string(argv[2]) != "start") {
-            error("Uso: hermes red start (primer plano; Ctrl+C para detener)");
-            return 1;
-        }
-        return hermes::iniciarServidorRed();
+        if (argc == 3 && string(argv[2]) == "start") return hermes::iniciarServidorRed();
+        return hermes::ejecutarClienteRed(argc, argv);
     }
 
     if (comando == "--version") {
@@ -245,45 +243,11 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if (job.solicitudDuplicada) {
-            cout << "job ID: " << job.job_id << endl;
-            info("Solicitud duplicada; se reutiliza el Job existente.");
-            return 0;
-        }
-
-        for (int i = 0; i < 50; ++i) {
-            obtenerJobPorId(job.job_id, job);
-
-            if (job.pid > 0 || job.status == Status::FAILED) {
-                break;
-            }
-
-            sleep_for(
-                milliseconds(20)
-            );
-        }
-
-        cout << "job ID: " << job.job_id << endl;
-
-        if (job.status == Status::FAILED) {
-            error(
-                job.mensajeError.empty()
-                    ? "No se pudo ejecutar el programa '" + programa + "'"
-                    : job.mensajeError
-            );
-
-            return 1;
-        }
-
-        if (job.pid > 0) {
-            cout << "PID: " << job.pid << endl;
-        } else {
-            cout << "PID: pendiente (en cola)" << endl;
-        }
-
-        return 0;        
+        esperarInicioJob(job);
+        return mostrarAdmisionJob(job);
     }
     
+
     if (comando == "cancel") {
 
     if (argc < 3) {

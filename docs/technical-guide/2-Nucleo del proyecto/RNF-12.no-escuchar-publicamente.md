@@ -32,28 +32,17 @@ No equivale a restringir acceso a LAN/VPN. [RNF-13](RNF-13.acceso-remoto-LAN-VPN
 autorizados mediante `redes_permitidas`.
 El firewall y la topología del entorno pueden impedir el acceso desde otro equipo.
 
-## Alcance del diagnóstico TCP
+## Diagnóstico y verificación
 
-Cada conexión recibe, si la escritura es posible, una respuesta JSON delimitada
-por salto de línea y se cierra inmediatamente:
-
-```json
-{"version":1,"ok":false,"error":"REMOTE_OPERATIONS_UNAVAILABLE"}
-```
-
-Esta respuesta permite comprobar conectividad; no representa todavía el
-protocolo HNP completo. El servicio no interpreta solicitudes ni ofrece envío,
-consulta o cancelación de trabajos. No se incluyen aún autenticación ni TLS.
-Los sockets aceptados son no bloqueantes y no se retienen conexiones de clientes.
-El backlog de escucha es 10; no constituye un límite configurable de sesiones.
-
-## Verificación
+La escucha ahora utiliza el protocolo documentado en
+[RNF-08: Solicitudes inválidas](RNF-08.solicitudes-invalidas.md).
+El cliente debe enviar un objeto JSON terminado en salto de línea; una solicitud
+`ping` válida recibe `pong`. Ya no se envía un diagnóstico espontáneo al conectar.
 
 ```sh
 make -C src/hermes
-python3 src/hermes/tests/network_listener.py
+python3 src/hermes/tests/network_invalid.py
 ```
 
-Las pruebas usan un HOME temporal y verifican el bind real en `/proc/net/tcp`,
-la escucha predeterminada, configuración explícita, fallback de interfaz inválida,
-rechazo de puerto ocupado, conexiones sucesivas y cierre con SIGTERM.
+Las pruebas usan un HOME temporal y comprueban solicitudes, continuidad del
+servicio, rechazo de origen y cierre con SIGTERM.
