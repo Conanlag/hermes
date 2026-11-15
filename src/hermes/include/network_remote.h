@@ -14,6 +14,7 @@ struct ConfiguracionRemota {
     std::map<std::string, std::string> identidades;
     std::map<std::string, PermisosRemotos> clientes;
 };
+void inicializarConfiguracionRemota();
 ConfiguracionRemota cargarConfiguracionRemota();
 nlohmann::json ejecutarOperacionRemota(const std::string& operacion,
     const nlohmann::json& parametros, const std::string& requestId,

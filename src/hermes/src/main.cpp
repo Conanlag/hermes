@@ -16,6 +16,7 @@
 #include "config.h"
 #include "data_paths.h"
 #include "network.h"
+#include "network_remote.h"
 
 #include <thread>
 #include <chrono>
@@ -29,6 +30,7 @@ using namespace std::chrono;
 int main(int argc, char* argv[]) {
     try {
         hermes::inicializarConfiguracion();
+        hermes::inicializarConfiguracionRemota();
         (void)hermes::rutaDatos("jobs.json");
         if (argc == 1) hermes::actualizarEnlacesDesarrollo();
     } catch (const std::exception& e) {

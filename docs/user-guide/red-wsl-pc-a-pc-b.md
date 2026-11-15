@@ -55,7 +55,8 @@ make -C src/hermes
 ```
 
 La compilación ejecuta el arranque normal para crear los archivos que falten y
-preparar los enlaces `src/hermes/data` y `src/hermes/config`. No requiere un
+preparar los enlaces `src/hermes/data`, `src/hermes/config` y
+`src/hermes/network`. No requiere un
 comando init. Usar `./hermes` desde `src/hermes` durante la prueba para no ejecutar
 por accidente una versión instalada anterior. Si hay un servidor de red activo,
 detenerlo con Ctrl+C antes de cambiar su configuración y volver a iniciarlo.
@@ -92,6 +93,13 @@ Estos ejemplos usan `~/.config/hermes`; si se ha definido un `XDG_CONFIG_HOME`
 absoluto, editar su subdirectorio `hermes` en lugar de la ruta predeterminada.
 
 ## 5. JSON completo de permisos remotos en PC A
+
+La compilación prepara `src/hermes/network` como enlace al directorio real de
+red del usuario. Si falta network.json, crea una plantilla lista para configurar,
+con `habilitada: false` y un cliente de ejemplo local. Si ya existe, como en
+PC A, conserva todo su contenido. El archivo se puede abrir desde
+`src/hermes/network/network.json`; no es una copia distinta.
+
 
 En WSL de PC A:
 

@@ -116,8 +116,12 @@ inline std::string rutaDatos(const std::string& nombreArchivo) {
     ).string();
 }
 
+inline std::filesystem::path directorioRed() {
+    return directorioDatosPredeterminado().parent_path() / "network";
+}
+
 // Solo en una copia de desarrollo: el binario instalado no crea enlaces
-// dentro de ~/.local/bin. Git conserva los dos enlaces; cada copia los adapta
+// dentro de ~/.local/bin. Git conserva los enlaces; cada copia los adapta
 // al usuario y al directorio de datos efectivo al ejecutar Hermes.
 inline void actualizarEnlacesDesarrollo() {
     namespace fs = std::filesystem;
@@ -140,6 +144,7 @@ inline void actualizarEnlacesDesarrollo() {
     };
     enlazar(proyecto / "data", fs::path(rutaDatos("jobs.json")).parent_path());
     enlazar(proyecto / "config", fs::path(rutaConfiguracion()).parent_path());
+    enlazar(proyecto / "network", directorioRed());
 }
 
 inline std::string rutaEventsLog() {
