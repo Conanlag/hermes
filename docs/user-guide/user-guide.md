@@ -437,3 +437,10 @@ A `172.25.70.19`, gateway de A `172.25.64.1` y Windows de B `192.168.1.73`.
 También documenta el bloqueo real causado por autorizar `192.168.1.7` en el
 firewall en lugar de `192.168.1.73`, las comprobaciones que lo localizaron y el
 comando exacto con el que se resolvió.
+
+
+Si la conexión deja de funcionar después de reiniciar PC A, la guía también
+incluye la [recuperación del proxy con IP Helper](red-wsl-pc-a-pc-b.md#11-incidente-tras-reiniciar-ip-helper-running-pero-sin-acceso-lan):
+Windows alcanzaba Hermes dentro de WSL, pero no aceptaba TCP por su IP LAN;
+`Restart-Service iphlpsvc` resolvió el incidente aunque el servicio figuraba
+Running. El procedimiento indica cómo comprobar cada tramo antes y después.

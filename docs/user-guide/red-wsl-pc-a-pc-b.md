@@ -123,7 +123,18 @@ Contenido:
                 "false",
                 "/usr/bin/sleep",
                 "/usr/bin/true",
-                "/usr/bin/false"
+                "/usr/bin/false",
+                "echo",
+                "ls",
+                "yes",
+                "time",
+                "bash",
+                "/usr/bin/echo",
+                "/usr/bin/ls",
+                "/usr/bin/yes",
+                "/usr/bin/time",
+                "/bin/bash",
+                "/usr/bin/bash"
             ]
         }
     ]
@@ -286,7 +297,10 @@ y `TcpTestSucceeded : True`. Si IP Helper está detenido:
 Start-Service iphlpsvc
 ```
 
-Repetir las comprobaciones después de iniciarlo.
+Repetir las comprobaciones después de iniciarlo. Si ya figura en `Running`,
+Windows puede alcanzar WSL pero falla la conexión a la IP LAN de A, consultar
+la [recuperación después de reiniciar](#11-incidente-tras-reiniciar-ip-helper-running-pero-sin-acceso-lan).
+El estado Running por sí solo no confirma que el proxy acepte conexiones.
 
 Finalmente, en **PowerShell de PC B**:
 
@@ -396,12 +410,94 @@ RemoteAddress : 192.168.1.73
 corrección resolvió la conexión. No se necesitó desactivar el firewall ni cambiar
 los permisos de trabajos para resolver ese bloqueo TCP.
 
-## 11. Diagnóstico rápido y cambios posteriores de IP
+## 11. Incidente tras reiniciar: IP Helper Running pero sin acceso LAN
+
+El 15 de noviembre de 2026, después de apagar y encender PC A, el usuario
+reportó que PC B ya no podía conectar aunque las direcciones IP seguían iguales.
+Desde PowerShell de PC A se observaron estos resultados:
+
+| Prueba en PC A | Resultado observado |
+| --- | --- |
+| `Test-NetConnection 172.25.70.19 -Port 45820` | TCP True; origen `172.25.64.1` |
+| `Test-NetConnection 192.168.1.74 -Port 45820` | Ping True; TCP False |
+| `Get-Service iphlpsvc` | Running |
+
+La primera prueba confirmó que Hermes estaba accesible dentro de WSL. La
+segunda localizó el fallo en el acceso por la IP de Windows, antes de poder
+probar permisos de trabajos de Hermes. No se registró una causa interna exacta
+del servicio: la resolución comprobada fue reiniciar IP Helper aun cuando
+indicaba Running. No fue necesario cambiar las IP ni los JSON de Hermes.
+
+### Comprobar y recuperar el acceso
+
+Primero, en WSL de PC A, confirmar que Hermes está iniciado. Si no lo está,
+ejecutar desde `src/hermes` y mantener la terminal abierta:
+
+```bash
+./hermes red start
+```
+
+El servicio de red funciona en primer plano y no se inicia automáticamente al
+encender la computadora. Si ya está escuchando, no iniciar una segunda instancia.
+Comprobarlo en otra terminal WSL:
+
+```bash
+ss -ltnp 'sport = :45820'
+```
+
+En **PowerShell de PC A como administrador**, ejecutar:
+
+```powershell
+Test-NetConnection 172.25.70.19 -Port 45820
+Test-NetConnection 192.168.1.74 -Port 45820
+Get-Service iphlpsvc
+netsh interface portproxy show v4tov4
+Get-NetTCPConnection -State Listen -LocalPort 45820 -ErrorAction SilentlyContinue
+```
+
+Si WSL responde, la regla apunta a las IP y puerto correctos, pero la entrada
+por Windows falla, reiniciar IP Helper:
+
+```powershell
+Restart-Service iphlpsvc
+```
+
+El usuario confirmó que este comando resolvió el incidente. El reinicio puede
+interrumpir brevemente otras conexiones que utilicen IP Helper; no se utiliza
+como primer paso si el servidor de WSL tampoco responde.
+
+Verificar de nuevo en PC A:
+
+```powershell
+Get-Service iphlpsvc
+Get-NetTCPConnection -State Listen -LocalPort 45820 -ErrorAction SilentlyContinue
+Test-NetConnection 192.168.1.74 -Port 45820
+```
+
+Se espera Running, escucha en `192.168.1.74:45820` y TCP True. Después, repetir
+desde **PowerShell de PC B**:
+
+```powershell
+Test-NetConnection 192.168.1.74 -Port 45820
+```
+
+Con TCP True, volver a comprobar una operación real desde WSL de B:
+
+```bash
+./hermes red job 192.168.1.74 sleep 120
+```
+
+Consultar el ID devuelto con `filter id`. Estos son los pasos de verificación
+posterior; no se presupone un resultado de trabajo solo porque se recuperó TCP.
+Si A ya responde por su IP LAN pero B continúa fallando, revisar el firewall,
+especialmente `RemoteAddress: 192.168.1.73`, según el incidente anterior.
+
+## 12. Diagnóstico rápido y cambios posteriores de IP
 
 | Resultado | Revisar |
 | --- | --- |
 | Windows de A no conecta a `172.25.70.19:45820` | IP actual de WSL, interfaz configurada, servidor iniciado y acceso Windows → WSL |
-| Windows de A llega a WSL, pero no escucha en `192.168.1.74:45820` | Portproxy e IP Helper |
+| Windows de A llega a WSL, pero falla `192.168.1.74:45820` | Comprobar portproxy y escucha; con regla correcta, reiniciar IP Helper incluso si figura Running, como en la sección 11 |
 | Todas las pruebas de A pasan, pero B falla | IP LAN actual de B, filtro RemoteAddress completo, reglas Block y conectividad LAN |
 | `UNAUTHORIZED` desde el CLI | Habilitación, registro del origen observado y permisos de operación en network.json |
 | Conexión cerrada sin respuesta | Filtro redes_permitidas y origen que observa WSL |
@@ -423,3 +519,42 @@ separado con `./hermes clean scheduler`; ese comando afecta los trabajos activos
 
 - [RF-18: operaciones remotas](../technical-guide/2-Nucleo%20del%20proyecto/RF-18.operaciones-remotas.md).
 - [Microsoft: acceso LAN a WSL y portproxy](https://learn.microsoft.com/es-es/windows/wsl/networking#accessing-a-wsl-2-distribution-from-your-local-area-network-lan).
+
+
+## Programas adicionales y operaciones del shell
+
+La lista de permisos incluye `echo`, `ls`, `yes`, `time` y `bash`, además de
+los programas iniciales y las rutas explícitas de la plantilla. Reiniciar
+Hermes Red con Ctrl+C y `./hermes red start` después de modificar network.json.
+No es necesario recompilar por un cambio de permisos.
+
+Desde WSL de PC B:
+
+```bash
+./hermes red job 192.168.1.74 echo Hola
+./hermes red job 192.168.1.74 ls -la
+./hermes red job 192.168.1.74 time sleep 2
+./hermes red job 192.168.1.74 bash -c 'sleep 2 & sleep 3 & wait'
+```
+
+`&` es un operador y `wait` es una orden interna del shell. No se agregan como
+programas independientes. Las comillas simples hacen que la expresión llegue
+al Bash de PC A; sin ellas, los operadores podrían ejecutarse en el shell de B.
+La misma regla se aplica al modo local: `./hermes job bash -c 'sleep 2 & sleep 3 & wait'`.
+`time` sin Bash usa el ejecutable externo; dentro de `bash -c` también puede
+usarse la palabra reservada del shell.
+
+`yes` ejecuta indefinidamente y consume CPU hasta que se termina o cancela:
+
+```bash
+./hermes red job 192.168.1.74 yes
+```
+
+Anotar su ID y solicitar su cancelación con `./hermes red cancel 192.168.1.74 ID`.
+Hermes no transmite stdout: no esperar ver en PC B la salida de `echo`, `ls` o
+`yes`. Consultar el estado y resultado con `filter id`.
+
+Autorizar `bash` o `time` permite lanzar otros programas mediante esos
+intérpretes/lanzadores, aunque no figuren individualmente en `programas`.
+Los permisos se aplican al ejecutable solicitado a Hermes y no inspeccionan
+el contenido de un script ni los comandos que este ejecute.
