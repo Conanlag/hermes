@@ -54,6 +54,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (comando == "red") {
+        if (argc == 3 && string(argv[2]) == "setup") return hermes::configurarRedInteractiva();
         if (argc == 3 && string(argv[2]) == "start") return hermes::iniciarServidorRed();
         return hermes::ejecutarClienteRed(argc, argv);
     }

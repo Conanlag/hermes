@@ -182,7 +182,7 @@ int iniciarServidorRed() {
                 if (remota.habilitada) {
                     const auto identidad = remota.identidades.find(ip);
                     if (identidad != remota.identidades.end()) {
-                        cliente->identidad = "tcp-" + identidad->second;
+                        cliente->identidad = "tcp-" + remota.ambitosTrabajos.at(identidad->second);
                         cliente->permisos = &remota.clientes.at(identidad->second);
                     }
                 }

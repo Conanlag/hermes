@@ -50,6 +50,8 @@ bool directorioDatosValido(const std::string& directorio);
  * @throws std::runtime_error si la configuración no se puede leer o guardar.
  */
 struct CambiosConfiguracion {
+    // Agrega orígenes bajo el mismo lock, conservando los existentes.
+    std::vector<std::string> agregarRedesPermitidas;
     bool redesPermitidas = false;
     std::vector<std::string> valorRedesPermitidas;
     bool directorioDatos = false;

@@ -91,6 +91,11 @@ ConfiguracionRemota cargarConfiguracionRemota() {
     if (!archivo) throw std::runtime_error("No se pudo leer network/network.json");
     json datos;
     archivo >> datos;
+    return interpretarConfiguracionRemota(datos);
+}
+
+ConfiguracionRemota interpretarConfiguracionRemota(const json& datos) {
+    ConfiguracionRemota config;
     if (!datos.is_object() || !datos.contains("habilitada") || !datos["habilitada"].is_boolean())
         throw std::runtime_error("network.json requiere habilitada booleana");
     if (!datos["habilitada"].get<bool>()) return config;
@@ -105,11 +110,16 @@ ConfiguracionRemota cargarConfiguracionRemota() {
             throw std::runtime_error("Los clientes ahora requieren id y direcciones IPv4, no sha256");
         const auto id = cliente.at("id").get<std::string>();
         if (!validarRequestId(id).esValido) throw std::runtime_error("ID de cliente inválido");
+        const auto ambito = cliente.value("ambito_trabajos", id);
+        if (!validarRequestId(ambito).esValido) throw std::runtime_error("Ámbito de trabajos inválido");
+        for (const auto& actual : config.ambitosTrabajos)
+            if (actual.second == ambito) throw std::runtime_error("Dos registros no pueden compartir un ámbito de trabajos");
+        config.ambitosTrabajos.emplace(id, ambito);
         const auto direcciones = cliente.at("direcciones").get<std::vector<std::string>>();
         if (direcciones.empty()) throw std::runtime_error("El cliente requiere al menos una IPv4");
         for (const auto& ip : direcciones) {
             if (!interfazValida(ip) || !reglaRedValida(ip))
-                throw std::runtime_error("Cada dirección de cliente debe ser una IPv4 individual LAN/VPN o loopback");
+                throw std::runtime_error("Cada dirección de cliente debe ser una IPv4 unicast individual válida");
             if (!config.identidades.emplace(ip, id).second)
                 throw std::runtime_error("Una IPv4 no puede pertenecer a varios registros de cliente");
         }
