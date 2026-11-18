@@ -444,3 +444,16 @@ incluye la [recuperación del proxy con IP Helper](red-wsl-pc-a-pc-b.md#11-incid
 Windows alcanzaba Hermes dentro de WSL, pero no aceptaba TCP por su IP LAN;
 `Restart-Service iphlpsvc` resolvió el incidente aunque el servicio figuraba
 Running. El procedimiento indica cómo comprobar cada tramo antes y después.
+
+## Asistente de configuración de Hermes Red
+
+Ejecuta `hermes red setup` en el servidor para registrar el nombre/ID y la IP
+del otro equipo. El asistente imprime los comandos para localizar las IP,
+valida las respuestas, conserva la configuración existente y muestra un
+resumen antes de guardar. Para WSL NAT prepara proxy y firewall y permite
+solicitar elevación de Windows para aplicarlos.
+
+La [guía del asistente red setup](red-setup.md) describe las preguntas, las
+respuestas del caso PC A / PC B, los respaldos, la aplicación de PowerShell y
+las pruebas finales. El procedimiento manual anterior sigue disponible para
+diagnosticar o completar instalaciones con restricciones de Windows.
