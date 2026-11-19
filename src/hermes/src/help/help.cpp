@@ -23,6 +23,7 @@ int mostrarAyuda() {
     cout << "  configmax <N>                  Configura el máximo de trabajos simultáneos (1-64)" << endl;
     cout << "  configmax --cola <M>           Configura los cupos de espera en cola (0-256)" << endl;
     cout << "  configmax <N> --cola <M>       Configura ambos valores en una sola operación" << endl;
+    cout << "  red setup                      Asistente para registrar un equipo y configurar LAN/WSL" << endl;
     cout << "  red start                      Inicia escucha TCP en primer plano; Ctrl+C detiene" << endl;
     cout << "  red job <host> [--request-id <id>] <programa> [args...]" << endl;
     cout << "                                 Envía un trabajo al servidor por TCP LAN/VPN" << endl;

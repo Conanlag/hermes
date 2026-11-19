@@ -8,17 +8,22 @@ además deben coincidir con la lista configurada mediante RF-20.
 
 ## Espacios admitidos
 
-Las reglas deben estar contenidas íntegramente en uno de estos espacios:
+Las reglas de subred deben estar contenidas íntegramente en uno de estos espacios:
 
 - Loopback: `127.0.0.0/8`.
 - Privados RFC1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`.
 - Compartido para VPN que lo utilicen: `100.64.0.0/10`.
 
-Los bits de host de una regla CIDR se normalizan: `192.168.1.25/24` representa
-`192.168.1.0/24`. Se rechazan reglas públicas, nombres DNS, IPv6, prefijos fuera
-de 0–32, tipos JSON incorrectos y reglas amplias como `0.0.0.0/0`. Las VPN que
-asignen IP públicas o rangos fuera de estos espacios no están soportadas por
-esta política inicial.
+También se admiten direcciones unicast individuales explícitas, sin prefijo o
+con `/32`, aunque estén fuera de RFC1918: por ejemplo `200.39.175.140` asignada
+a un equipo de una LAN. La clase de dirección no prueba por sí sola si el
+equipo está en una LAN, VPN o Internet. Esta excepción permite registrar un
+equipo concreto; no habilita subredes públicas como `200.39.175.0/24`.
+
+Los bits de host de las subredes privadas se normalizan. Se rechazan nombres
+DNS, IPv6, prefijos fuera de 0–32, tipos JSON incorrectos, `0.0.0.0/0`, el
+espacio 0/8, multicast/reservado 224/4 y superiores y link-local 169.254/16.
+El servidor sigue exigiendo una coincidencia exacta con los permisos configurados.
 
 ## Política de acceso
 
@@ -40,7 +45,8 @@ El emparejamiento y control exclusivo de clientes ejecutores siguen pendientes.
 
 Las pruebas de `src/hermes/tests/network_access.sh` comprueban los límites de
 los espacios privados, loopback y VPN compartida, y el rechazo de direcciones
-públicas o rangos que exceden los espacios admitidos.
+no autorizadas y subredes fuera de los espacios admitidos; las IP unicast
+individuales explícitas se verifican como excepciones /32.
 
 La configuración y aplicación de la lista se describen en
 [RF-20: Restricción a redes y direcciones permitidas](RF-20.restriccion-redes-direcciones.md).

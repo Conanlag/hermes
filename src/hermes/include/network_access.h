@@ -4,7 +4,8 @@
 
 namespace hermes {
 // Una IP sin prefijo equivale a /32. Solo admite subredes completas de
-// loopback, RFC1918 y espacio compartido usado por algunas VPN.
+// loopback, RFC1918 y espacio compartido usado por algunas VPN; también
+// direcciones unicast explícitas (/32), aunque estén fuera de RFC1918.
 bool reglaRedValida(const std::string& regla);
 bool origenRedPermitido(const std::string& origen,
                         const std::vector<std::string>& reglas);

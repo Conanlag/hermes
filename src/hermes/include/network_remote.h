@@ -13,8 +13,11 @@ struct ConfiguracionRemota {
     // La clave es la IPv4 observada por TCP, nunca un campo del JSON recibido.
     std::map<std::string, std::string> identidades;
     std::map<std::string, PermisosRemotos> clientes;
+    std::map<std::string, std::string> ambitosTrabajos;
 };
+void inicializarConfiguracionRemota();
 ConfiguracionRemota cargarConfiguracionRemota();
+ConfiguracionRemota interpretarConfiguracionRemota(const nlohmann::json& datos);
 nlohmann::json ejecutarOperacionRemota(const std::string& operacion,
     const nlohmann::json& parametros, const std::string& requestId,
     const std::string& identidad, const PermisosRemotos& permisos);

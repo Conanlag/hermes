@@ -258,6 +258,9 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
                 throw std::invalid_argument("redes_permitidas contiene una IP o red no permitida.");
     }
 
+    for (const auto& regla : cambios.agregarRedesPermitidas)
+        if (!reglaRedValida(regla)) throw std::invalid_argument("Origen de red inválido");
+
     BloqueoConfiguracion bloqueo;
     const std::string ruta = rutaConfiguracion();
     std::ifstream archivo(ruta);
@@ -295,6 +298,19 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
     if (cambios.interfaz) datos["interfaz"] = cambios.valorInterfaz;
     if (cambios.puerto) datos["puerto"] = cambios.valorPuerto;
     if (cambios.redesPermitidas) datos["redes_permitidas"] = cambios.valorRedesPermitidas;
+    if (!cambios.agregarRedesPermitidas.empty()) {
+        if (!datos.contains("redes_permitidas")) datos["redes_permitidas"] = {"127.0.0.0/8"};
+        auto& reglas = datos["redes_permitidas"];
+        if (!reglas.is_array()) throw std::runtime_error("redes_permitidas debe ser una lista");
+        for (const auto& regla : reglas)
+            if (!regla.is_string() || !reglaRedValida(regla.get<std::string>()))
+                throw std::runtime_error("redes_permitidas contiene reglas inválidas");
+        for (const auto& regla : cambios.agregarRedesPermitidas) {
+            bool existe = false;
+            for (const auto& actual : reglas) if (actual == regla) existe = true;
+            if (!existe) reglas.push_back(regla);
+        }
+    }
     guardarAtomico(ruta, datos);
 
     if (cambios.trabajosMaximos) {

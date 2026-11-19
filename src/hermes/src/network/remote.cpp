@@ -9,6 +9,8 @@
 #include "storage.h"
 #include "timestamp.h"
 #include <algorithm>
+#include <cerrno>
+#include <unistd.h>
 #include <fstream>
 #include <limits>
 #include <stdexcept>
@@ -37,14 +39,63 @@ bool propio(const json& job, const std::string& identidad) {
 }
 }
 
+void inicializarConfiguracionRemota() {
+    const auto directorio = directorioRed();
+    const auto ruta = directorio / "network.json";
+    if (std::filesystem::exists(ruta)) return;
+    std::filesystem::create_directories(directorio);
+    const json datos = {
+        {"habilitada", false},
+        {"clientes", json::array({{
+            {"id", "prueba-local"},
+            {"direcciones", {"127.0.0.1"}},
+            {"operaciones", {"submit", "query", "list", "cancel"}},
+            {"programas", {"true", "false", "sleep", "/usr/bin/true", "/usr/bin/false",
+                "/usr/bin/sleep", "echo", "ls", "yes", "time", "bash", "/usr/bin/echo",
+                "/usr/bin/ls", "/usr/bin/yes", "/usr/bin/time", "/bin/bash", "/usr/bin/bash"}}
+        }})}
+    };
+    const std::string contenido = datos.dump(4) + '\n';
+    std::string temporal = (directorio / ".network-inicial-XXXXXX").string();
+    int fd = mkstemp(temporal.data());
+    if (fd < 0) throw std::runtime_error("No se pudo preparar network.json");
+    try {
+        std::size_t escritos = 0;
+        while (escritos < contenido.size()) {
+            const auto n = write(fd, contenido.data() + escritos, contenido.size() - escritos);
+            if (n < 0 && errno == EINTR) continue;
+            if (n <= 0) throw std::runtime_error("No se pudo escribir network.json");
+            escritos += static_cast<std::size_t>(n);
+        }
+        if (fsync(fd) != 0) throw std::runtime_error("No se pudo sincronizar network.json");
+        const int resultado = close(fd);
+        fd = -1;
+        if (resultado != 0) throw std::runtime_error("No se pudo cerrar network.json");
+        // Publicar el archivo completo sin reemplazar una configuración que
+        // otro proceso haya creado mientras se preparaba la plantilla.
+        if (link(temporal.c_str(), ruta.c_str()) != 0 && errno != EEXIST)
+            throw std::runtime_error("No se pudo crear network.json");
+        unlink(temporal.c_str());
+    } catch (...) {
+        if (fd >= 0) close(fd);
+        unlink(temporal.c_str());
+        throw;
+    }
+}
+
 ConfiguracionRemota cargarConfiguracionRemota() {
     ConfiguracionRemota config;
-    const auto ruta = directorioDatosPredeterminado().parent_path() / "network/network.json";
+    const auto ruta = directorioRed() / "network.json";
     if (!std::filesystem::exists(ruta)) return config;
     std::ifstream archivo(ruta);
     if (!archivo) throw std::runtime_error("No se pudo leer network/network.json");
     json datos;
     archivo >> datos;
+    return interpretarConfiguracionRemota(datos);
+}
+
+ConfiguracionRemota interpretarConfiguracionRemota(const json& datos) {
+    ConfiguracionRemota config;
     if (!datos.is_object() || !datos.contains("habilitada") || !datos["habilitada"].is_boolean())
         throw std::runtime_error("network.json requiere habilitada booleana");
     if (!datos["habilitada"].get<bool>()) return config;
@@ -59,11 +110,16 @@ ConfiguracionRemota cargarConfiguracionRemota() {
             throw std::runtime_error("Los clientes ahora requieren id y direcciones IPv4, no sha256");
         const auto id = cliente.at("id").get<std::string>();
         if (!validarRequestId(id).esValido) throw std::runtime_error("ID de cliente inválido");
+        const auto ambito = cliente.value("ambito_trabajos", id);
+        if (!validarRequestId(ambito).esValido) throw std::runtime_error("Ámbito de trabajos inválido");
+        for (const auto& actual : config.ambitosTrabajos)
+            if (actual.second == ambito) throw std::runtime_error("Dos registros no pueden compartir un ámbito de trabajos");
+        config.ambitosTrabajos.emplace(id, ambito);
         const auto direcciones = cliente.at("direcciones").get<std::vector<std::string>>();
         if (direcciones.empty()) throw std::runtime_error("El cliente requiere al menos una IPv4");
         for (const auto& ip : direcciones) {
             if (!interfazValida(ip) || !reglaRedValida(ip))
-                throw std::runtime_error("Cada dirección de cliente debe ser una IPv4 individual LAN/VPN o loopback");
+                throw std::runtime_error("Cada dirección de cliente debe ser una IPv4 unicast individual válida");
             if (!config.identidades.emplace(ip, id).second)
                 throw std::runtime_error("Una IPv4 no puede pertenecer a varios registros de cliente");
         }
