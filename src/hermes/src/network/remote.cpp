@@ -160,7 +160,9 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
             const auto config = cargarConfiguracion();
             auto job = crearJob(programa, argumentos, "red-" + identidad + "-" + requestId,
                                      config.trabajosMaximos, config.maxCola, identidad);
-            esperarInicioJob(job);
+            // Sin espera al scheduler: el hilo de poll() no puede bloquearse hasta
+            // 1 s por submit (head-of-line blocking). El Job ya está persistido y
+            // el cliente tolera pid 0 ("PID: pendiente (en cola)").
             return exito({{"job_id", job.job_id}, {"duplicated", job.solicitudDuplicada}, {"job", jsonDesdeJob(job)}});
         }
         if (operacion == "list") {

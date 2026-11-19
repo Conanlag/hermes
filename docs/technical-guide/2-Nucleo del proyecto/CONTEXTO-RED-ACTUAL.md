@@ -5,11 +5,18 @@
 > repositorio. Los requisitos se citan con su identificador y las discrepancias se concentran en la
 > sección 6.
 >
-> Estado del arte: la implementación vigente corresponde al commit `4efb296` (*feat: implentacion de
-> red*), sobre `24fa39f` (RF-20 / RNF-13) y `37060e6` (RNF-12).
+> Estado del arte: la línea base del subsistema es `4efb296` (*feat: implentacion de red*), sobre
+> `24fa39f` (RF-20 / RNF-13) y `37060e6` (RNF-12). Este documento se actualizó tras el merge
+> `858e3b1` (*Merge branch 'main' into alan*), que integra `703d9c9` (*link simbolico para la red*),
+> `816c8a4` (*automatizacion de redes con hermes red setup*) y `66a0180` (*docs: setup*).
 >
-> Alcance de la auditoría: solo lectura. No se modificó ningún archivo de `src/`, `verif/` ni el
-> `Makefile`.
+> Ese merge **no cambió el protocolo de red**: `protocol.cpp`, `client.cpp`, `job.cpp`, `cancel.cpp`,
+> `storage.cpp` y `scheduler.cpp` quedaron intactos. Lo que cambió es el comando `red` (nuevo
+> subcomando `setup`), el esquema de `network.json` (campos nuevos) y la política de direcciones
+> admitidas (/32 unicast fuera de RFC1918).
+>
+> Alcance de la auditoría: solo lectura sobre `src/` y `verif/`. El único archivo modificado es este
+> documento.
 
 ---
 
@@ -23,6 +30,12 @@ actúan como **clientes** (`hermes red job|filter|cancel <host> ...`) y envían 
 El servidor ejecuta los trabajos con **su propio** scheduler y persistencia; el cliente no ejecuta
 nada de forma remota.
 
+Desde el merge de `main` existe un tercer punto de entrada: `hermes red setup`
+(`setup.cpp`, `main.cpp:57`). Es un **asistente interactivo que se ejecuta en el servidor**, no abre
+sockets, no inicia el scheduler y no forma parte del flujo de una petición remota: solo escribe
+`config.json` y `network.json` (§4.2). Los clientes siguen siendo `job|filter|cancel` y no necesitan
+`setup`.
+
 La decisión de arquitectura está en `docs/desicions/ADR-016-Red-propuesta.md` (cliente-servidor
 centralizado, toda operación pasa por PC-A). La entrega efectivamente implementada es la descrita en
 `docs/technical-guide/2-Nucleo del proyecto/RF-18.operaciones-remotas.md`: **TCP con mensajes JSON,
@@ -34,12 +47,14 @@ distribución a ejecutores del ADR sigue pendiente y el propio RF-18 lo declara 
 ```
   PC-B (cliente)                                   PC-A (servidor)
   ┌──────────────────────────┐                     ┌───────────────────────────────────────┐
-  │ hermes red job host ...  │  TCP IPv4 :45820    │ hermes red start                      │
-  │  - valida localmente     │ ──────────────────► │  - accept4() / poll()                 │
-  │  - getaddrinfo(AF_INET)  │                     │  - filtro redes_permitidas            │
-  │  - JSON + '\n'           │ ◄────────────────── │  - identidad por IP observada         │
-  │  - imprime resumen       │   JSON + '\n'       │  - procesarSolicitudRed()             │
-  └──────────────────────────┘                     │  - ejecutarOperacionRemota()          │
+  │ hermes red job host ...  │  TCP IPv4 :45820    │ hermes red setup (solo config)        │
+  │  - valida localmente     │ ──────────────────► │ hermes red start                      │
+  │  - getaddrinfo(AF_INET)  │                     │  - accept4() / poll()                 │
+  │  - JSON + '\n'           │                     │  - filtro redes_permitidas            │
+  │  - imprime resumen       │ ◄────────────────── │  - identidad por IP observada         │
+  │                          │   JSON + '\n'       │  - ámbito de trabajos por registro    │
+  └──────────────────────────┘                     │  - procesarSolicitudRed()             │
+                                                   │  - ejecutarOperacionRemota()          │
                                                    │  - crearJob() / cancelarJobDetallado()│
                                                    │  - scheduler local + jobs.json        │
                                                    └───────────────────────────────────────┘
@@ -62,8 +77,13 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
 
 ### 1.3 Flujo completo de una petición remota
 
-1. `main.cpp:54-57` enruta `red`: si `argc == 3 && argv[2] == "start"` llama a
-   `hermes::iniciarServidorRed()`; en cualquier otro caso llama a `hermes::ejecutarClienteRed()`.
+Antes de enrutar cualquier comando, `main()` ejecuta `inicializarConfiguracionRemota()`
+(`main.cpp:33`), que crea `network.json` si falta (§4.2).
+
+1. `main.cpp:56-59` enruta `red`: `argc == 3 && argv[2] == "setup"` →
+   `hermes::configurarRedInteractiva()`; `argc == 3 && argv[2] == "start"` →
+   `hermes::iniciarServidorRed()`; en cualquier otro caso → `hermes::ejecutarClienteRed()`.
+   `setup` no participa en este flujo.
 2. El cliente valida localmente con los mismos validadores del modo local
    (`validarPrograma`, `validarRequestId`, `validarIdTexto`, `validarTipoFiltro`,
    `validarStatusTexto`) en `src/hermes/src/network/client.cpp`.
@@ -73,15 +93,16 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
    10 s (`client.cpp:135-153`).
 4. El servidor acepta (`accept4`, `server.cpp:169-175`), obtiene la IP con `inet_ntop`
    (`server.cpp:176-177`) y aplica el filtro `origenRedPermitido(ip, config.redesPermitidas)`
-   (`server.cpp:178`, implementado en `src/hermes/src/network/access.cpp:45-57`).
-5. Si el origen está permitido, busca la identidad del cliente en
-   `ConfiguracionRemota::identidades` (mapa `IPv4 → id`) y asigna el puntero a sus permisos
-   (`server.cpp:182-188`).
+   (`server.cpp:178`, implementado en `src/hermes/src/network/access.cpp:48-60`).
+5. Si el origen está permitido y la red está habilitada, busca el registro en
+   `ConfiguracionRemota::identidades` (mapa `IPv4 → id`) y construye la identidad de trabajos con
+   `"tcp-" + ambitosTrabajos[id]` (`server.cpp:182-188`). El ámbito (`ambito_trabajos`) puede diferir
+   del `id` visible; por defecto es el propio `id` (§4.2).
 6. Acumula bytes hasta `'\n'` y delega en `procesarSolicitudRed()`
    (`server.cpp:138-143`, `src/hermes/src/network/protocol.cpp:12-54`).
 7. `procesarSolicitudRed()` valida el sobre y, para `submit|query|list|cancel`, exige identidad y
    permisos; luego llama a `ejecutarOperacionRemota()`
-   (`src/hermes/src/network/remote.cpp:85-161`).
+   (`src/hermes/src/network/remote.cpp:141-217`).
 8. Para `submit`, `crearJob()` persiste el Job en `jobs.json` bajo `jobs.lock` con
    `propietario_remoto` y `tipo_ejecucion: "remote"` (`src/hermes/src/job/job.cpp:102-195`), y
    `esperarInicioJob()` espera hasta 1 s a que el scheduler asigne PID (`job.cpp:306-313`).
@@ -98,7 +119,7 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
 | Límite | Evidencia |
 | --- | --- |
 | Sin TLS ni cifrado; el tráfico viaja en claro | `RF-18:12-17`; no hay dependencia OpenSSL en `Makefile` |
-| Sin autenticación criptográfica: la identidad es la IP observada | `network_remote.h:13-15`; `server.cpp:182-188` |
+| Sin autenticación criptográfica: la identidad es la IP observada | `network_remote.h:13-16`; `server.cpp:182-188` |
 | Sin transmisión de `stdout`/`stderr` remotos | `RF-18:145-149`; el Job persistido no guarda salidas (`job.cpp:174-191`) |
 | Sin distribución a clientes ejecutores | `RF-18:7-10`; no existe código de reenvío |
 | Sin sesiones persistentes ni reconexión | una conexión = un mensaje (`RNF-08:3-6`) |
@@ -108,6 +129,9 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
 | Solo IPv4 (`AF_INET`) en cliente y servidor | `server.cpp:81`; `client.cpp:127` |
 | Máximo 32 clientes TCP concurrentes | `server.cpp:178` |
 | Cola de trabajos limitada por `trabajos_maximos + max_cola` | `job.cpp:83-85,167-170` |
+| `red setup` es interactivo, solo primer plano y no verifica conectividad real | `setup.cpp:394-441` |
+| Toda ejecución de Hermes crea `network.json` si falta, incluso comandos locales | `main.cpp:33`; `remote.cpp:42-84` |
+| `servidor`, `equipos` y `clientes[].tipo` no se leen al arrancar; son metadatos del asistente | `remote.cpp:94-139` |
 
 ---
 
@@ -117,10 +141,11 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
 
 | Archivo | Responsabilidad | Funciones / tipos clave |
 | --- | --- | --- |
-| `include/network.h` | Fachada pública del módulo | `int iniciarServidorRed()`; `int ejecutarClienteRed(int argc, char* argv[])` |
-| `include/network_access.h` <br> `src/network/access.cpp` | Validación y aplicación de reglas IPv4/CIDR | `bool reglaRedValida(const std::string&)`; `bool origenRedPermitido(const std::string&, const std::vector<std::string>&)`; `struct Red { uint32_t base, mascara; }` (anónimo); `leer()`, `contenida()` |
+| `include/network.h` | Fachada pública del módulo | `int iniciarServidorRed()`; `int configurarRedInteractiva()`; `int ejecutarClienteRed(int argc, char* argv[])` |
+| `include/network_access.h` <br> `src/network/access.cpp` | Validación y aplicación de reglas IPv4/CIDR, incluida la excepción /32 unicast | `bool reglaRedValida(const std::string&)`; `bool origenRedPermitido(const std::string&, const std::vector<std::string>&)`; `struct Red { uint32_t base, mascara; }` (anónimo); `leer()`, `contenida()` |
 | `include/network_protocol.h` <br> `src/network/protocol.cpp` | Sobre JSON, validación de mensajes y despacho por operación | `constexpr unsigned MAX_MENSAJE_RED = 16384`; `std::string errorProtocolo(const std::string&)`; `std::string procesarSolicitudRed(const std::string&, const std::string& identidad, const PermisosRemotos*)` |
-| `include/network_remote.h` <br> `src/network/remote.cpp` | Carga de `network.json`, autorización y ejecución de operaciones sobre el dominio local | `struct PermisosRemotos { vector<string> operaciones, programas; }`; `struct ConfiguracionRemota { bool habilitada; map<string,string> identidades; map<string,PermisosRemotos> clientes; }`; `ConfiguracionRemota cargarConfiguracionRemota()`; `nlohmann::json ejecutarOperacionRemota(operacion, params, requestId, identidad, permisos)` |
+| `include/network_remote.h` <br> `src/network/remote.cpp` | Plantilla, carga y validación de `network.json`, autorización y ejecución de operaciones sobre el dominio local | `struct PermisosRemotos { vector<string> operaciones, programas; }`; `struct ConfiguracionRemota { bool habilitada; map<string,string> identidades; map<string,PermisosRemotos> clientes; map<string,string> ambitosTrabajos; }`; `void inicializarConfiguracionRemota()`; `ConfiguracionRemota cargarConfiguracionRemota()`; `ConfiguracionRemota interpretarConfiguracionRemota(const nlohmann::json&)`; `nlohmann::json ejecutarOperacionRemota(operacion, params, requestId, identidad, permisos)` |
+| `src/network/setup.cpp` | Asistente interactivo `red setup`: detección de entorno LAN/WSL, registro de equipos, escritura de `config.json`/`network.json` y generación del script de PowerShell | `int configurarRedInteractiva()`; helpers anónimos `preguntar()`, `confirmar()`, `pedirIP()`, `interfaces()` (`getifaddrs` + `/proc/net/route`), `gateway()`, `usaProxyWindows()` (`wslinfo --networking-mode`), `ejecutar()` (`fork`/`execvp`, sin shell), `guardar()` (mkstemp+fsync+rename), `Lock` (`flock`), `scriptWindows()` |
 | `src/network/server.cpp` | Servidor TCP en primer plano: socket, `poll()`, ciclo de vida de clientes, señales | `iniciarServidorRed()`; clases internas `Descriptor` (RAII de `close`), `Senales` (sigaction SIGINT/SIGTERM/SIGPIPE); `struct Cliente` (socket, `esperado`, `identidad`, `permisos`, `entrada`, `salida`, `enviado`, `limite`, `cerrado`); `responder()` |
 | `src/network/client.cpp` | CLI remoto: parseo, validaciones, conexión, transporte y presentación | `ejecutarClienteRed()`; helpers anónimos `Socket`, `IgnorarPipe`, `esperar()`, `numero()`, `requestId()` (16 bytes de `getrandom` → hex) |
 
@@ -128,9 +153,9 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
 
 | Archivo | Relación con red |
 | --- | --- |
-| `src/main.cpp` | Enrutamiento `red start` vs. cliente (`54-57`); arranque del scheduler **antes** de atender comandos locales (`188-195`); `--help` no documenta `red` en detalle (eso vive en `help.cpp`) |
-| `include/config.h`, `src/config/config.cpp` | `ConfiguracionSistema` aporta `interfaz`, `puerto`, `redesPermitidas`, `reglasRedValidas`; `interfazValida()`, `cargarConfiguracion()` |
-| `src/config/config_update.cpp` | Actualización atómica de `interfaz`, `puerto`, `redes_permitidas` mediante `CambiosConfiguracion` (validación en `249-258`; escritura en `295-297`) |
+| `src/main.cpp` | `inicializarConfiguracionRemota()` al arrancar (`33`); enrutamiento `red setup` / `red start` / cliente (`56-59`); arranque del scheduler **antes** de atender comandos locales (`194`); `--help` no documenta `red` en detalle (eso vive en `help.cpp`) |
+| `include/config.h`, `src/config/config.cpp` | `ConfiguracionSistema` aporta `interfaz`, `puerto`, `redesPermitidas`, `reglasRedValidas`; `CambiosConfiguracion` añade `agregarRedesPermitidas` (`config.h:54`); `interfazValida()`, `cargarConfiguracion()` |
+| `src/config/config_update.cpp` | Actualización atómica de `interfaz`, `puerto`, `redes_permitidas` y **adición** de reglas con `agregarRedesPermitidas` mediante `CambiosConfiguracion` (validación en `249-262`; escritura y fusión en `298-313`) |
 | `include/validator.h`, `src/validator/validator.cpp` | `validarRequestId()` (`117-161`), `validarPrograma()` (`92-115`), `validarIdTexto()` (`212`), `validarTipoFiltro()` (`164-209`), `validarStatusTexto()` (`338-388`) — compartidos por CLI local y remoto |
 | `include/job.h`, `src/job/job.cpp` | `crearJob(programa, argumentos, requestId, trabajosMaximos, maxCola, propietarioRemoto)`; deduplicación por `request_id`; `esperarInicioJob()` |
 | `include/cancel.h`, `src/cancel/cancel.cpp` | `cancelarJobDetallado(jobId, propietarioRemoto)`; `enum class CodigoCancelacion` |
@@ -138,7 +163,8 @@ detrás del mismo proxy son indistinguibles (`red-wsl-pc-a-pc-b.md:23-27`; `RF-1
 | `include/scheduler.h`, `src/scheduler/scheduler.cpp` | `iniciarSchedulerSiNecesario()` (`1287`); supervisión de procesos; `atenderCancelacionesRemotas()` (`825-850`) |
 | `include/event_log.h`, `src/events/event_log.cpp` | Bitácora JSONL; `log_event(job_id, level, message, extra)` y `log_event_system(...)` |
 | `include/job_presentation.h`, `src/job/presentation.cpp` | `jsonDesdeJob()`, `jobDesdeJson()`, `mostrarAdmisionJob()`, `mostrarDetalleJob()`, `mostrarResumenJob()` — presentación compartida local/remoto |
-| `include/data_paths.h` | `rutaConfiguracion()` (`22-31`), `directorioDatosPredeterminado()` (`16-20`), `rutaDatos()` (`111-117`) |
+| `include/data_paths.h` | `rutaConfiguracion()` (`22-31`), `directorioDatosPredeterminado()` (`16-20`), `rutaDatos()` (`111-117`), `directorioRed()` (`119-121`), `actualizarEnlacesDesarrollo()` (`126-148`, crea los enlaces `data`, `config` y `network`) |
+| `src/help/help.cpp` | Ayuda del CLI; `red setup` documentado en `26`, junto a `red start|job|filter|cancel` |
 | `src/hermes/Makefile` | `SRC = $(shell find src -type f -name '*.cpp')`: cualquier `.cpp` nuevo se compila sin editar el Makefile; enlaza `-pthread` |
 | `src/hermes/examples/network/network.json` | Plantilla funcional con un cliente `prueba-local` sobre `127.0.0.1` |
 
@@ -149,8 +175,11 @@ main.cpp
  ├── network.h ──────────────► server.cpp ──► network_access.h / network_protocol.h
  │                                 │          config.h / scheduler.h
  │                                 └── (usa) remote.cpp vía protocol.cpp
- └── network.h ──────────────► client.cpp ──► network_access.h / network_protocol.h
-                                    │         config.h / validator.h / job_presentation.h
+ ├── network.h ──────────────► client.cpp ──► network_access.h / network_protocol.h
+ │                                 │          config.h / validator.h / job_presentation.h
+ ├── network.h ──────────────► setup.cpp ──► network_remote.h / network_access.h
+ │                                          config.h / data_paths.h / validator.h
+ └── network_remote.h ───────► remote.cpp (plantilla al arrancar)
 
 protocol.cpp ──► network_remote.h ──► remote.cpp ──► job.h / cancel.h / storage.h
                                                      config.h / data_paths.h / validator.h
@@ -158,11 +187,17 @@ protocol.cpp ──► network_remote.h ──► remote.cpp ──► job.h / c
 remote.cpp ──(persiste vía)──► job.cpp ──► storage.cpp ──► data_paths.h
 job.cpp ──► event_log.cpp
 scheduler.cpp ──► storage.cpp / process.cpp / cancel.cpp / event_log.cpp
+setup.cpp ──► config_update.cpp (actualizarConfiguracion) / data_paths.h
 ```
 
 ---
 
 ## 3. Contrato del protocolo de comunicación
+
+> El merge `858e3b1` **no tocó** `protocol.cpp`, `client.cpp`, `server.cpp:138-165` ni
+> `network_protocol.h`. El sobre, los códigos de error, los límites y las operaciones de este
+> capítulo son idénticos a la línea base `4efb296`. Lo que cambió fuera del protocolo es el esquema
+> de `network.json` (§4.2) y la función compartida `reglaRedValida()` (§4.3 y §4.4).
 
 ### 3.1 Transporte y framing
 
@@ -237,7 +272,7 @@ cliente (`protocol.cpp:39-43`; `RF-18:86-87`).
 | `params.programa` | string | obligatorio; debe coincidir **literalmente** con `permisos.programas` |
 | `params.argumentos` | array de strings | obligatorio (puede ser vacío); sin `'\0'` |
 
-`params` debe tener **exactamente 2 claves** (`remote.cpp:90`). Cualquier clave extra o ausente →
+`params` debe tener **exactamente 2 claves** (`remote.cpp:146`). Cualquier clave extra o ausente →
 `INVALID_PARAMS`.
 
 ```json
@@ -262,8 +297,8 @@ proviene de `Job::solicitudDuplicada` (`job.cpp:139`) y **no** es un estado pers
 {"version":1,"request_id":"r-2","operation":"query","params":{"job_id":1}}
 ```
 
-- `params` debe tener exactamente 1 clave y `job_id` entero en `[1, UINT32_MAX]` (`remote.cpp:137`).
-- Solo devuelve el Job si `propietario_remoto == identidad` (`remote.cpp:35-37,139-142`).
+- `params` debe tener exactamente 1 clave y `job_id` entero en `[1, UINT32_MAX]` (`remote.cpp:193`).
+- Solo devuelve el Job si `propietario_remoto == identidad` (`remote.cpp:37-39,195-198`).
 - Respuesta correcta: `result` es **el objeto Job proyectado**, sin envoltorio `job`.
 - Job ajeno o inexistente → `NOT_FOUND`.
 
@@ -281,13 +316,13 @@ proviene de `Job::solicitudDuplicada` (`job.cpp:139`) y **no** es un estado pers
 | `tipo` | `"status"` o `"programa"`; si aparece, `valor` es obligatorio |
 | `valor` | validado con `validarStatusTexto()` o `validarPrograma()` |
 
-`params` admite como máximo 4 claves y **solo** las cuatro anteriores (`remote.cpp:111-114`).
+`params` admite como máximo 4 claves y **solo** las cuatro anteriores (`remote.cpp:167-170`).
 El resultado es `{"jobs":[ ...proyecciones... ],"next_after":<job_id del último incluido>}`
-(`remote.cpp:126-135`). El recorrido salta `job_id <= after`, filtra por propietario y por el campo
+(`remote.cpp:182-191`). El recorrido salta `job_id <= after`, filtra por propietario y por el campo
 `tipo`, y corta al alcanzar `limit`. El cliente itera páginas mientras `jobs` no esté vacío y exige
 que `next_after` avance (`client.cpp:214-227`); si no avanza lanza *Cursor de respuesta inválido*.
 
-La proyección (`remote.cpp:28-34`) expone solo:
+La proyección (`remote.cpp:30-36`) expone solo:
 `job_id, pid, status, programa, argumentos, tiempo_recepcion, tiempo_inicio, tiempo_terminacion,
 codigo_salida, mensaje_error, cancel_requested`.
 No expone `request_id`, `propietario_remoto`, `tipo_ejecucion`, `pid_inicio`, `sid` ni salidas.
@@ -298,7 +333,7 @@ No expone `request_id`, `propietario_remoto`, `tipo_ejecucion`, `pid_inicio`, `s
 {"version":1,"request_id":"r-4","operation":"cancel","params":{"job_id":1}}
 ```
 
-Respuestas (`remote.cpp:144-154`):
+Respuestas (`remote.cpp:200-210`):
 
 | Situación | `result` / `error` |
 | --- | --- |
@@ -312,13 +347,18 @@ Respuestas (`remote.cpp:144-154`):
 La deduplicación se implementa en `crearJob()` (`job.cpp:98-151`), no en el protocolo:
 
 - El servidor construye la clave persistida como
-  `"red-" + identidad + "-" + requestId` (`remote.cpp:105-106`), donde `identidad` es
-  `"tcp-" + <id de network.json>`. Por tanto el ámbito de deduplicación es **cliente + request_id**.
+  `"red-" + identidad + "-" + requestId` (`remote.cpp:160-162`), donde `identidad` es
+  `"tcp-" + <ambito_trabajos del registro>` (`server.cpp:185`). Por defecto el ámbito coincide con el
+  `id` de `network.json`, pero `setup` conserva el identificador anterior al renombrar un registro
+  (§4.2). El ámbito de deduplicación es **ámbito de trabajos + request_id**.
+- Consecuencia del merge: el historial pertenece al **ámbito**, no al `id` visible. El parser rechaza
+  dos registros con el mismo `ambito_trabajos` (`remote.cpp:115-117`), así que dos registros distintos
+  nunca comparten historial; un solo registro puede conservarlo al cambiar su `id` visible.
 - La búsqueda ocurre dentro de `modificarJobsSeguros()` (bloqueo exclusivo de `jobs.lock`), de modo
   que dos `submit` concurrentes con la misma clave producen un solo Job.
 - Coincidencia exacta de `request_id`, `propietario_remoto`, `programa` y `argumentos` → se devuelve
   el Job existente con `duplicated: true` y sin cambiar su estado.
-- Misma clave con programa/argumentos distintos → `runtime_error` que `remote.cpp:156-159` convierte
+- Misma clave con programa/argumentos distintos → `runtime_error` que `remote.cpp:212-215` convierte
   en `JOB_OPERATION_FAILED` con `message`.
 - La garantía dura mientras el registro permanezca en `jobs.json`; `hermes clean data` elimina Jobs
   finalizados y con ellos la clave.
@@ -349,8 +389,8 @@ La deduplicación se implementa en `crearJob()` (`job.cpp:98-151`), no en el pro
 
 | Código | Disparador |
 | --- | --- |
-| `UNAUTHORIZED` | La operación no está en `permisos.operaciones` (`remote.cpp:87`) |
-| `PROGRAM_NOT_ALLOWED` | `programa` no válido, contiene `'\0'` o no está en `permisos.programas` (`remote.cpp:94-96`) |
+| `UNAUTHORIZED` | La operación no está en `permisos.operaciones` (`remote.cpp:143`) |
+| `PROGRAM_NOT_ALLOWED` | `programa` no válido, contiene `'\0'` o no está en `permisos.programas` (`remote.cpp:150-152`) |
 | `INVALID_PARAMS` | Forma/tipos/rangos incorrectos en `submit`, `list`, `query` o `cancel` |
 | `NOT_FOUND` | Job inexistente o de otro propietario |
 | `NOT_CANCELABLE` | Estado terminal (`SUCCEEDED`, `FAILED`, `CANCELED`, `INTERRUPTED`) |
@@ -399,44 +439,84 @@ Comportamiento ante configuración inválida (`config.cpp:27-131`):
 - Lista vacía (`[]`) es válida y **deniega todos** los orígenes.
 
 La API `actualizarConfiguracion()` (`CambiosConfiguracion`) valida `interfaz`, `puerto` y
-`redes_permitidas` antes de escribir atómicamente (`config_update.cpp:249-258,295-297`), pero **no
-existe un subcomando CLI** que la invoque para estas tres claves: `main.cpp` solo expone
-`configmax`. En la práctica se editan a mano y se reinicia el servicio.
+`redes_permitidas` antes de escribir atómicamente (`config_update.cpp:249-262,298-313`). El merge
+añadió `CambiosConfiguracion::agregarRedesPermitidas` (`config.h:54`): una lista de orígenes que se
+**fusiona** con `redes_permitidas` conservando las reglas existentes, bajo el mismo `config.lock`
+(`config_update.cpp:301-313`). Si la clave no existe, parte de `["127.0.0.0/8"]`; si es un array con
+reglas inválidas, lanza error en lugar de reescribirla.
+
+`red setup` es el **único consumidor CLI** de esa API: fija `interfaz` y agrega un origen. Sigue sin
+haber un subcomando para fijar `puerto` o reemplazar `redes_permitidas` directamente, y `configmax`
+solo cubre concurrencia y cola. Fuera de `setup`, estas claves se editan a mano y se reinicia el
+servicio.
 
 ### 4.2 `network.json` (RF-18)
 
-Ruta resuelta: `$HOME/.local/share/hermes/network/network.json`
-(`remote.cpp:42`: `directorioDatosPredeterminado().parent_path() / "network/network.json"`).
-Es **independiente** de `directorio_datos`: aunque se configure otro directorio de datos, la ruta se
-deriva siempre del directorio por defecto (`$HOME/.local/share/hermes`). El RF-18 lo declara
-explícitamente (líneas 44-46).
+Ruta resuelta: `$HOME/.local/share/hermes/network/network.json`, calculada por `directorioRed()`
+(`data_paths.h:119-121` = `directorioDatosPredeterminado().parent_path() / "network"`), consumida en
+`remote.cpp:88` y `setup.cpp:261`. Es **independiente** de `directorio_datos`: aunque se configure otro
+directorio de datos, la ruta se deriva siempre del directorio por defecto
+(`$HOME/.local/share/hermes`). El RF-18 lo declara explícitamente.
+
+**Inicialización automática (nuevo).** `inicializarConfiguracionRemota()` (`remote.cpp:42-84`) se
+ejecuta en **cada** arranque de Hermes (`main.cpp:33`) y crea el archivo si falta:
+
+- Directorio `~/.local/share/hermes/network` y plantilla con `habilitada: false`.
+- Un registro `prueba-local` sobre `127.0.0.1`, operaciones `submit/query/list/cancel` y los
+  programas `true`, `false`, `sleep`, `echo`, `ls`, `yes`, `time`, `bash` y sus rutas absolutas.
+- Publicación atómica: `mkstemp` + `write` + `fsync` + `link()`; si otro proceso ya creó el archivo,
+  `EEXIST` se ignora y **no se reemplaza** (`remote.cpp:74-78`).
+- Si ya existe, no se lee ni se modifica en esta fase.
+
+Consecuencias: un despliegue recién instalado nunca queda "sin `network.json`"; como la plantilla trae
+`habilitada: false`, el servidor sigue atendiendo solo `ping` hasta que se edite o se ejecute `setup`.
+
+**Enlace de desarrollo.** `actualizarEnlacesDesarrollo()` crea el enlace hermano `src/hermes/network`
+→ `directorioRed()` (`data_paths.h:147`), igual que `data` y `config`. Solo se ejecuta cuando
+`argc == 1` (`main.cpp:35`). El enlace está versionado en Git con un destino absoluto de otra máquina
+(`/home/leo/.local/share/hermes/network`); cada copia lo reemplaza si es un symlink y falla si en su
+lugar hay un archivo o directorio real (`data_paths.h:134-144`).
+
+Esquema actual, con los campos que escribe `red setup`:
 
 ```json
 {
   "habilitada": true,
+  "servidor": {
+    "id": "PC-A", "modo": "wsl-nat", "ip_windows": "10.204.218.198",
+    "interfaz": "172.25.70.19", "gateway_wsl": "172.25.64.1", "puerto": 45820
+  },
   "clientes": [
     {
-      "id": "pc-02",
-      "direcciones": ["192.168.1.25"],
+      "id": "gateway-PC-A",
+      "tipo": "gateway",
+      "ambito_trabajos": "pc-b-via-windows",
+      "direcciones": ["172.25.64.1"],
       "operaciones": ["submit", "query", "list", "cancel"],
       "programas": ["sleep", "true", "/usr/bin/sleep"]
     }
+  ],
+  "equipos": [
+    { "id": "PC-B", "ip_lan": "200.39.175.139", "acceso": "gateway-PC-A",
+      "regla_firewall": "Hermes-45820-PC-B" }
   ]
 }
 ```
 
-Validación completa antes de abrir el puerto (`remote.cpp:40-83`):
+Validación completa antes de abrir el puerto (`interpretarConfiguracionRemota()`,
+`remote.cpp:94-139`, invocada por `cargarConfiguracionRemota()` en `86-95`):
 
 | Elemento | Regla | Error |
 | --- | --- | --- |
-| Archivo ausente | `habilitada = false`, sin error | — |
+| Archivo ausente | `habilitada = false`, sin error (la plantilla ya lo crea antes) | — |
 | `habilitada` | obligatoria y booleana | `network.json requiere habilitada booleana` |
 | `habilitada: false` | termina la carga; el servidor solo atiende `ping` | — |
 | `tls` presente | rechazo explícito de configuración antigua | `Quite tls de network.json ...` |
 | `clientes` | debe ser array | `clientes debe ser una lista` |
 | `sha256` en un cliente | rechazo de configuración antigua | `Los clientes ahora requieren id y direcciones IPv4, no sha256` |
-| `id` | válido según `validarRequestId()` | `ID de cliente inválido` |
-| `direcciones` | array no vacío; cada elemento IPv4 individual (`interfazValida` + `reglaRedValida`) | `Cada dirección ... IPv4 individual LAN/VPN o loopback` |
+| `id` | válido según `validarRequestId()` (1-128 de `[A-Za-z0-9._:-]`) | `ID de cliente inválido` |
+| `ambito_trabajos` | opcional; por defecto `id`; válido según `validarRequestId()`; **único** entre registros | `Ámbito de trabajos inválido`; `Dos registros no pueden compartir un ámbito de trabajos` |
+| `direcciones` | array no vacío; cada elemento IPv4 individual (`interfazValida` + `reglaRedValida`) | `Cada dirección de cliente debe ser una IPv4 unicast individual válida` |
 | IP repetida entre clientes | `emplace` falla | `Una IPv4 no puede pertenecer a varios registros de cliente` |
 | `operaciones` | subconjunto de `submit|query|list|cancel` | `Permiso de operación desconocido` |
 | `programas` | cada uno validado con `validarPrograma()` y sin `'\0'` | `Los programas permitidos deben ser nombres o rutas válidos` |
@@ -445,13 +525,23 @@ Validación completa antes de abrir el puerto (`remote.cpp:40-83`):
 Cualquier excepción aborta `iniciarServidorRed()` **antes** de crear el socket y antes de arrancar el
 scheduler (`server.cpp:71-79`).
 
+**Claves que no se interpretan.** `servidor`, `equipos` y `clientes[].tipo` los escribe `setup`, pero
+`interpretarConfiguracionRemota()` no los lee, no los valida y no los usa para autorizar ni para
+escuchar. En particular:
+
+- La interfaz y el puerto reales salen de `config.json`, no de `servidor.interfaz`/`servidor.puerto`
+  (el asistente escribe ambos para mantenerlos coherentes).
+- `equipos` es bookkeeping del firewall por equipo; no agrega identidades ni autenticación, y nada
+  comprueba que `acceso` apunte a un `clientes[].id` existente ni que `ip_lan` sea válida.
+- `tipo: "gateway"` es informativo: el parser no distingue gateways de clientes directos.
+
 Limitación relevante de la validación: `validarPrograma()` solo comprueba que la cadena no esté
 vacía (`validator.cpp:92-115`). Por eso `programas` acepta cualquier cadena no vacía sin `'\0'`;
 la exigencia de "nombre o ruta literal válida" no se verifica más allá de eso.
 
 ### 4.3 Espacios de direcciones admitidos (RNF-13)
 
-`access.cpp:33-43` acepta una regla solo si está **íntegramente contenida** en uno de:
+`access.cpp:33-46` acepta una regla si está **íntegramente contenida** en uno de:
 
 - `127.0.0.0/8` (loopback)
 - `10.0.0.0/8`
@@ -459,9 +549,22 @@ la exigencia de "nombre o ruta literal válida" no se verifica más allá de eso
 - `192.168.0.0/16`
 - `100.64.0.0/10` (espacio compartido CGNAT usado por algunas VPN)
 
-`leer()` normaliza los bits de host (`192.168.1.25/24 → 192.168.1.0/24`), admite IP sin prefijo
-como `/32` y rechaza prefijos fuera de `[0, 32]`, IPv6, hostnames y `'\0'`. `contenida()` implementa
-la contención de subred comparando máscaras y bases.
+**Excepción /32 unicast (nueva).** Si ninguna contención aplica, `reglaRedValida()` aún acepta una
+dirección **individual** (`/32`, con o sin prefijo explícito) cuando cumple
+`access.cpp:42-45`:
+
+- `base >= 1.0.0.0` (excluye `0.0.0.0/8`),
+- `base < 224.0.0.0` (excluye multicast y reservado `224/4` y superiores),
+- fuera de `169.254.0.0/16` (link-local).
+
+Esto habilita autorizar una IP de LAN no privada, por ejemplo `200.39.175.140` o
+`200.39.175.140/32`, sin abrir `200.39.175.0/24`. Se aplica tanto a `config.redes_permitidas`
+como a `network.json` `clientes[].direcciones`. No es una decisión neutral de seguridad: amplía la
+superficie autorizable a cualquier host público concreto y por eso RNF-13 se actualizó (§6.7).
+
+`leer()` normaliza los bits de host en subredes (`192.168.1.25/24 → 192.168.1.0/24`), admite IP sin
+prefijo como `/32` y rechaza prefijos fuera de `[0, 32]`, IPv6, hostnames y `'\0'`. `contenida()`
+implementa la contención de subred comparando máscaras y bases.
 
 ### 4.4 Orden exacto de evaluación de seguridad
 
@@ -471,15 +574,15 @@ la contención de subred comparando máscaras y bases.
 3. inet_ntop(origen)                         server.cpp:176-177
 4. origenRedPermitido(ip, redes_permitidas)  server.cpp:178   → si falla: cierre SIN respuesta
 5. cupo: clientes.size() < 32                server.cpp:178   → si se excede: cierre SIN respuesta
-6. identidad = identidades[ip]               server.cpp:182-188 → si no hay: sin permisos
+6. identidad = "tcp-" + ambitosTrabajos[identidades[ip]]               server.cpp:182-188 → si no hay: sin permisos
 7. procesarSolicitudRed(..., identidad, permisos)
    7a. framing y forma del sobre             protocol.cpp:13-37
    7b. ping (permitido sin identidad)        protocol.cpp:39-43
    7c. operación de trabajos exige identidad protocol.cpp:44-45 → UNAUTHORIZED
-   7d. permiso de operación                  remote.cpp:87     → UNAUTHORIZED
-   7e. validación de params por operación     remote.cpp:90-137
-   7f. nombre literal de programa            remote.cpp:94-96 → PROGRAM_NOT_ALLOWED
-8. ejecución sobre el dominio local          remote.cpp:104-154
+   7d. permiso de operación                  remote.cpp:143    → UNAUTHORIZED
+   7e. validación de params por operación     remote.cpp:146-210
+   7f. nombre literal de programa            remote.cpp:150-152 → PROGRAM_NOT_ALLOWED
+8. ejecución sobre el dominio local          remote.cpp:160-211
 ```
 
 Propiedades y no-propiedades:
@@ -489,17 +592,20 @@ Propiedades y no-propiedades:
 - La identidad **nunca** se toma del JSON; el protocolo no tiene campo de identidad
   (`network_remote.h:13`).
 - La comprobación de programa es **literal**: `sleep` y `/usr/bin/sleep` son permisos distintos
-  (`remote.cpp:94-96`; `RF-18:94-99`).
+  (`remote.cpp:150-152`; `RF-18:94-99`).
 - No hay autenticación, firma ni cifrado: quien pueda falsificar el origen TCP o compartir la IP
   (NAT) hereda los permisos del registro (`RF-18:88-92`).
 - `0.0.0.0` como `interfaz` escucha en todas las IPv4, pero no amplía `redes_permitidas`
   (`RF-20:34-35`).
-- El cliente solo conecta a destinos que pasen `reglaRedValida()` (`client.cpp:139`), es decir, el
-  destino también debe pertenecer a LAN/VPN/loopback. Es una restricción adicional del cliente que
-  impide usar Hermes Red contra una IP pública, aunque el servidor la autorizara.
+- El cliente solo conecta a destinos que pasen `reglaRedValida()` (`client.cpp:139`). Tras el merge,
+  esa función también admite una IPv4 unicast individual fuera de RFC1918 (§4.3), así que el cliente
+  puede usar Hermes Red contra una IP pública **concreta** autorizada, pero nunca contra una subred
+  pública completa. Es una restricción del cliente, no del servidor.
 - WSL/Windows: el `portproxy` sustituye la conexión, así que el origen observado es el gateway de
   WSL o la IP del host Windows, no la IP LAN del cliente. Las reglas deben autorizar **ese** origen
-  observado (`RF-18:221-226`; `docs/user-guide/red-wsl-pc-a-pc-b.md`).
+  observado (`RF-18`; `docs/user-guide/red-wsl-pc-a-pc-b.md`). Varios equipos detrás de ese proxy
+  siguen compartiendo un único registro de `clientes`; `setup` los separa en `equipos` solo para
+  el firewall, no para la autorización de Hermes.
 
 ---
 
@@ -575,8 +681,21 @@ en `server.cpp:194-197`, se informa por `stderr` y se retorna 1.
 
 ### 5.5 Observabilidad
 
-**No existe ni una sola llamada a `EventLog` dentro de `src/hermes/src/network/*.cpp`** (verificado por
-búsqueda). Las consecuencias:
+Hasta RF-22 **no existía ninguna llamada a `EventLog` dentro de `src/hermes/src/network/*.cpp`**. Desde
+RF-22 el servidor registra, con `log_event_system` (API que nunca lanza):
+
+- `Conexión rechazada` (WARN): origen fuera de `redes_permitidas` o cupo de 32 agotado, con `{ip, motivo}`.
+- `Cliente desconectado` (WARN): solo cierres anómalos (`FIN_SIN_MENSAJE`, `TIMEOUT_LECTURA`,
+  `TIMEOUT_ESCRITURA`, `ERROR_LECTURA`, `ERROR_ESCRITURA`, `ERROR_SOCKET`, `ERROR_INTERNO`), con
+  `{ip, motivo, bytes_recibidos}`.
+- `Error interno al procesar cliente` (ERROR): excepción contenida por la frontera por cliente.
+
+Para no degradar el bucle con el `fsync` de `EventLog`, cada motivo se registra **como máximo una vez
+cada 60 s** y los cierres normales tras entregar la respuesta no generan eventos. Sigue sin registrarse
+la apertura de conexiones aceptadas, el origen aceptado, los rechazos `UNAUTHORIZED` /
+`PROGRAM_NOT_ALLOWED` / `INVALID_*` ni la creación de la plantilla por `red setup`. Tampoco
+`inicializarConfiguracionRemota()` registra nada: no queda rastro de cuándo se creó la plantilla, qué
+interfaz escribió `red setup` ni qué origen agregó a `redes_permitidas`. Las consecuencias vigentes:
 
 - No se registra la apertura de conexiones, el origen aceptado, el origen rechazado por
   `redes_permitidas`, el exceso de cupo (32), ni los rechazos `UNAUTHORIZED` /
@@ -587,8 +706,9 @@ búsqueda). Las consecuencias:
   - `Solicitud duplicada reutilizada` (DEBUG) (`job.cpp:236`);
   - `Cancelación` con `{"accion":"CANCELADO_EN_COLA"}` (`cancel.cpp:72-74`);
   - transiciones del scheduler (`Transición a RUNNING/SUCCEEDED/FAILED`, `Cancelación exitosa`).
-- `propietario_remoto` (`tcp-<id>`) y `tipo_ejecucion: "remote"` viven solo en `jobs.json`
-  (`job.cpp:185-188`), no en eventos de sistema.
+- `propietario_remoto` (`tcp-<ambito_trabajos>`) y `tipo_ejecucion: "remote"` viven solo en
+  `jobs.json` (`job.cpp:185-188`), no en eventos de sistema. Desde el merge, el sufijo es el ámbito
+  y puede no coincidir con el `id` visible del registro (`server.cpp:185`).
 - Por tanto, un intento no autorizado **no deja rastro** en `events.jsonl`. Es la carencia de
   observabilidad más relevante para auditoría de seguridad.
 
@@ -604,7 +724,8 @@ búsqueda). Las consecuencias:
 | PC-A administra conexiones y autoriza | **Parcial**: autoriza por IP, sin sesión administrada | `server.cpp:166-189` |
 | Determinación de equipo ejecutor y distribución | **No implementado** | `RF-18:7-10`; sin código de reenvío |
 | Comunicación bidireccional y resultados al solicitante | **No implementado**; el servidor solo responde a la petición | `RNF-08:5-6` |
-| Identidad persistente por UUID, independiente de IP | **No implementado**: la identidad es `id` de `network.json` mapeado a IP | `network_remote.h:13-15` |
+| Identidad persistente por UUID, independiente de IP | **No implementado**: la identidad es `ambito_trabajos` de `network.json` mapeado a IP | `network_remote.h:13-16`; `server.cpp:185` |
+| Separación servidor / gateway / equipos | **Parcial y solo de bookkeeping**: `setup` escribe `servidor` y `equipos`, pero la autorización sigue siendo IP→registro y nada valida esas claves | `setup.cpp:369-392`; `remote.cpp:94-139` |
 | DHCP: actualizar `direcciones` conservando `id` | **Cumple como procedimiento manual** | `RF-18:89-92` |
 | Descubrimiento automático mDNS/DNS-SD | **No implementado** | solo `getaddrinfo` manual (`client.cpp:131`) |
 | TLS y autenticación criptográfica | **No implementado por decisión explícita** | `RF-18:12-17` |
@@ -618,31 +739,37 @@ búsqueda). Las consecuencias:
 | `config.json` en `~/.config/hermes` con XDG | Cumple | `data_paths.h:22-31` |
 | `interfaz`, `puerto` con defaults y validación | Cumple | `config.cpp:96-101` |
 | Valores inválidos → default + advertencia | Cumple, con matiz: `puerto` no se ajusta al límite, se descarta la clave | `config.cpp:81-96` |
-| `CambiosConfiguracion` permite actualizar directorio, interfaz y puerto | Cumple en API | `config_update.cpp:249-258` |
-| CLI para actualizar esas claves | **Brecha**: solo existe `configmax` | `main.cpp:91-186`; `help.cpp:23-25` |
+| `CambiosConfiguracion` permite actualizar directorio, interfaz y puerto | Cumple en API; ahora también agrega `redes_permitidas` | `config_update.cpp:249-262`; `config.h:54` |
+| CLI para actualizar esas claves | **Parcialmente resuelta**: `red setup` fija `interfaz` y agrega un origen; no hay CLI para `puerto` ni para reemplazar `redes_permitidas` | `setup.cpp:413-417`; `help.cpp:26` |
 
 ### 6.3 RF-18
 
 | Requisito | Estado | Observación |
 | --- | --- | --- |
 | TCP + JSON sin TLS/certificados | Cumple | `RF-18:12-17` |
-| `network.json` en `~/.local/share/hermes/network/` | Cumple | `remote.cpp:42` |
-| Sin `network.json`/`habilitada:false` → solo `ping` | Cumple | `remote.cpp:43,50`; `protocol.cpp:44-45` |
-| Validación completa antes de scheduler/puerto | Cumple | `server.cpp:75-79` |
-| `id` 1-128 con reglas de `request_id` | Cumple | `remote.cpp:61` |
-| `direcciones` IPv4 individuales LAN/VPN/loopback | Cumple | `remote.cpp:62-69` |
-| Operaciones como subconjunto | Cumple | `remote.cpp:73-75` |
+| `network.json` en `~/.local/share/hermes/network/` | Cumple; ruta centralizada en `directorioRed()` | `data_paths.h:119-121`; `remote.cpp:88` |
+| Plantilla automática si falta el archivo | Cumple (nuevo) | `remote.cpp:42-84`; `main.cpp:33` |
+| Enlace de desarrollo `src/hermes/network` | Cumple (nuevo) | `data_paths.h:147` |
+| Sin `network.json`/`habilitada:false` → solo `ping` | Cumple; en la práctica la plantilla siempre existe y `habilitada:false` gobierna | `remote.cpp:99-101`; `protocol.cpp:44-45` |
+| Validación completa antes de scheduler/puerto | Cumple | `server.cpp:72-79` |
+| `id` 1-128 con reglas de `request_id` | Cumple | `remote.cpp:111-112` |
+| `ambito_trabajos` opcional, válido y único | Cumple (nuevo) | `remote.cpp:113-117` |
+| `direcciones` IPv4 unicast individuales | Cumple, con la política ampliada de §4.3 | `remote.cpp:118-125` |
+| Operaciones como subconjunto | Cumple | `remote.cpp:126-131` |
 | Programas "nombres o rutas literales válidos" | **Parcial**: `validarPrograma()` solo descarta cadena vacía | `validator.cpp:92-115` |
 | `submit` con `propietario_remoto` y `tipo_ejecucion` | Cumple | `job.cpp:185-188` |
-| Deduplicación por cliente + `request_id` | Cumple | `remote.cpp:105`; `job.cpp:102-151` |
-| `query`/`list`/`cancel` limitados al propietario | Cumple | `remote.cpp:35-37,129,141,145` |
-| `list` 1-50 por página, paginación interna | Cumple, pero el cliente nunca envía `limit` (usa 20) | `client.cpp:124`; `remote.cpp:126` |
-| `NOT_FOUND`/`NOT_CANCELABLE`/`PROGRAM_NOT_ALLOWED`/`UNAUTHORIZED` | Cumple | `remote.cpp:87,96,142,147-150` |
-| `message` en los rechazos | **Parcial**: solo `JOB_OPERATION_FAILED` y `NOT_CANCELABLE` incluyen `message`; `UNAUTHORIZED`/`PROGRAM_NOT_ALLOWED` no | `remote.cpp:22,149,157-158` |
+| Deduplicación por ámbito + `request_id` | Cumple | `remote.cpp:160-162`; `job.cpp:102-151` |
+| `query`/`list`/`cancel` limitados al propietario | Cumple | `remote.cpp:37-39,195-198,202` |
+| `list` 1-50 por página, paginación interna | Cumple, pero el cliente nunca envía `limit` (usa 20) | `client.cpp:124`; `remote.cpp:182-191` |
+| `NOT_FOUND`/`NOT_CANCELABLE`/`PROGRAM_NOT_ALLOWED`/`UNAUTHORIZED` | Cumple | `remote.cpp:143,150-152,196-198,200-210` |
+| `message` en los rechazos | **Parcial**: solo `JOB_OPERATION_FAILED` y `NOT_CANCELABLE` incluyen `message`; `UNAUTHORIZED`/`PROGRAM_NOT_ALLOWED` no | `remote.cpp:24,205,213-214` |
 | `filter id` sin coincidencia → 0 | Cumple | `client.cpp:188-191` |
 | No transmisión de `stdout` | Cumple | `RF-18:145-149` |
 | Sin sesión de control a ejecutor | Cumple (no existe) | `RF-18:181-183` |
-| Migración de `tls`/`sha256` | Cumple | `remote.cpp:52-59` |
+| Migración de `tls`/`sha256` | Cumple | `remote.cpp:104-110` |
+| Asistente `red setup`: registra equipo y prepara LAN/WSL | Cumple (nuevo) | `setup.cpp:251-447`; `main.cpp:57`; `help.cpp:26` |
+| `setup` conserva registros, permisos y respaldos | Cumple, con límites: los dos archivos no son atómicos entre sí y no verifica conectividad | `setup.cpp:406-421,442-445` |
+| `servidor`/`equipos` validados al arrancar | **Brecha**: se escriben pero el parser no los lee | `remote.cpp:94-139` |
 | Pruebas `python3 src/hermes/tests/network_remote.py` e `invalid.py` | **Brecha documental**: `src/hermes/tests/` no existe ni está versionado | `git ls-files src/hermes`; ver §6.8 |
 
 ### 6.4 RF-20
@@ -653,10 +780,11 @@ búsqueda). Las consecuencias:
 | Conexión no autorizada se cierra sin respuesta; el servicio continúa | Cumple | `server.cpp:178-179` |
 | IP individual = `/32`; CIDR normalizado | Cumple | `access.cpp:8-25` |
 | Sin clave → solo `127.0.0.0/8` | Cumple | `config.h:26` |
-| Lista vacía deniega todo | Cumple | `access.cpp:50-56` (bucle sin reglas → `false`) |
+| Lista vacía deniega todo | Cumple | `access.cpp:54-59` (bucle sin reglas → `false`) |
 | Lista inválida → falla antes de abrir el puerto | Cumple | `config.cpp:107-126`; `server.cpp:73-74` |
-| Una regla inválida invalida toda la lista | Cumple | `access.cpp:49-50` |
-| Pruebas | **Brecha**: el propio RF-20 dice "por el momento no hay TC listo" | `RF-20:57-59`; ver §6.8 |
+| Una regla inválida invalida toda la lista | Cumple | `access.cpp:52-53` |
+| IP pública individual explícita (`/32`) | Cumple (nuevo): la clase de dirección ya no bloquea un host concreto; sigue rechazando subredes públicas | `access.cpp:42-45`; RF-20, sección "IP individual fuera de los rangos privados" |
+| Pruebas | **Brecha**: RF-20 sigue declarando que no hay TC de red | `RF-20`; ver §6.8 |
 
 ### 6.5 RNF-08
 
@@ -686,7 +814,7 @@ búsqueda). Las consecuencias:
 | Interfaz inválida → `127.0.0.1`, sin fallback a `0.0.0.0` | Cumple | `config.cpp:97-101` |
 | Dirección no local o puerto ocupado → error y salida 1 | Cumple | `server.cpp:91-92,194-197` |
 | Ctrl+C/SIGTERM cierran la escucha | Cumple | `server.cpp:34-62,112,191-193` |
-| Sin `red status`/`red stop`/daemonización | Cumple (no existen) | `main.cpp:54-57`; `help.cpp:26-31` |
+| Sin `red status`/`red stop`/daemonización | Cumple (no existen) | `main.cpp:56-59`; `help.cpp:26-32` |
 | **"El comando no inicia el scheduler"** | **Contradicho**: con `network.json` habilitado, `red start` arranca el scheduler | `server.cpp:76-79` vs. `RNF-12:9` |
 
 El punto anterior no es un defecto de código: es **documentación desactualizada**. RF-18 exige que el
@@ -694,11 +822,13 @@ servidor procese trabajos con su scheduler local, por lo que RNF-12 quedó obsol
 
 ### 6.7 RNF-13
 
-| Requisito | Estado |
-| --- | --- |
-| Reglas contenidas en loopback/RFC1918/`100.64.0.0/10` | Cumple (`access.cpp:36-42`) |
-| Normalización de bits de host | Cumple (`access.cpp:22-23`) |
-| Rechazo de públicas, DNS, IPv6, prefijos fuera de rango, `0.0.0.0/0` | Cumple (`access.cpp:8-25,33-43`) |
+| Requisito | Estado | Evidencia |
+| --- | --- | --- |
+| Subredes contenidas en loopback/RFC1918/`100.64.0.0/10` | Cumple | `access.cpp:36-41` |
+| IP unicast individual explícita fuera de esos espacios (`/32`) | Cumple por decisión documentada en RNF-13; antes se rechazaba | `access.cpp:42-45`; RNF-13, "Espacios admitidos" |
+| Normalización de bits de host en subredes | Cumple (`access.cpp:22-23`) |
+| Rechazo de DNS, IPv6, prefijos fuera de rango, `0.0.0.0/0` | Cumple (`access.cpp:8-25`) |
+| Rechazo de `0.0.0.0/8`, `224/4` y superiores, `169.254.0.0/16` | Cumple (`access.cpp:44-45`) |
 | Default solo loopback | Cumple (`config.h:26`) |
 | `0.0.0.0` no amplía autorización | Cumple (filtro independiente) |
 | Verificación `src/hermes/tests/network_access.sh` | **Brecha documental**: el archivo no existe (ver §6.8) |
@@ -708,6 +838,8 @@ servidor procese trabajos con su scheduler local, por lo que RNF-12 quedó obsol
 **Hallazgo principal: el subsistema de red no tiene ni una sola prueba automatizada.** La búsqueda en
 `verif/` de `red`, `network.json`, `redes_permitidas`, `UNAUTHORIZED`, `PROGRAM_NOT_ALLOWED`,
 `interfaz` o `puerto` no produce coincidencias dentro de `verif/` (solo aparecen en `docs/` y `src/`).
+El merge `858e3b1` **no modificó `verif/`**: `git diff e52c51f..HEAD --stat -- verif/` está vacío. Las
+más de 1 000 líneas nuevas de `setup.cpp` y su documentación no tienen ningún caso de prueba.
 
 Estado en la matriz de trazabilidad (`verif/verification-plan/traceability-matrix.md`):
 
@@ -744,7 +876,10 @@ origen no autorizado); espacios RNF-13 (públicas, IPv6, DNS, prefijos inválido
 framing (`INVALID_JSON`, `MESSAGE_TOO_LARGE`, `INCOMPLETE_MESSAGE`, `REQUEST_TIMEOUT`,
 `UNSUPPORTED_VERSION`); clientes concurrentes y cupo de 32; `query`/`list`/`cancel` remotos y
 aislamiento entre propietarios; deduplicación remota; NAT/portproxy; cierre con `SIGTERM` del
-servidor.
+servidor; creación de la plantilla `network.json` y no reemplazo si ya existe; `red setup` en modo
+directo y WSL NAT; validación de `ambito_trabajos` (duplicado, inválido, ausente); conservación de
+respaldos; rechazo de `network.json` cambiado durante la interacción; y la excepción /32 con sus
+exclusiones (`0/8`, `224/4`, `169.254/16`).
 
 **Brecha documental confirmada:** RF-16, RF-18, RNF-08, RNF-12 y RNF-13 mandan ejecutar
 `src/hermes/tests/network_remote.py`, `network_invalid.py`, `network_access.sh` y `rf16.sh`. Ese
@@ -774,32 +909,38 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
 | --- | --- | --- | --- |
 | D1 | **Cero pruebas automatizadas del subsistema de red**; la matriz marca RF-16/18/20 y RNF-12/13 como `Pendiente` | Cualquier cambio en red es una regresión silenciosa | `verif/verification-plan/traceability-matrix.md:21,23,25,46,47`; §6.8 |
 | D2 | `errorProtocolo()` devuelve `request_id: null` y el cliente exige que coincida, así que `MESSAGE_TOO_LARGE`, `INCOMPLETE_MESSAGE` y `REQUEST_TIMEOUT` se muestran como *Respuesta inválida del servidor* | Diagnóstico engañoso; se pierde el código real | `protocol.cpp:9`; `client.cpp:178` |
-| D3 | `esperarInicioJob()` duerme hasta 1 s dentro del hilo de `poll()`; cada `submit` relee `config.json` y `jobs.json` varias veces | Bloqueo de cabeza de línea: un `submit` retrasa a todos los clientes hasta ~1 s | `remote.cpp:104-107`; `job.cpp:306-313`; `server.cpp:112-163` |
-| D4 | Cero `EventLog` en el módulo de red: sin auditoría de conexiones, orígenes rechazados, `UNAUTHORIZED` o `PROGRAM_NOT_ALLOWED` | No hay evidencia forense de intentos no autorizados | búsqueda en `src/hermes/src/network/*.cpp` |
-| D5 | `request_id` persistido es `red-tcp-<id>-<request_id>`; el valor original del cliente no aparece en `jobs.json` | RNF-22 exige correlación directa solicitud↔job; en red obliga a reconstruir el prefijo | `remote.cpp:105-106`; `job.cpp:189-191` |
-| D6 | `UNAUTHORIZED` y `PROGRAM_NOT_ALLOWED` no llevan `message` | El CLI muestra el código en inglés como texto de error | `remote.cpp:22,87,96`; `client.cpp:199` |
+| D3 | ~~`esperarInicioJob()` duerme hasta 1 s dentro del hilo de `poll()`~~ **Resuelto en RF-22**: la rama `submit` ya no espera al scheduler y responde con `pid: 0` | Bloqueo de cabeza de línea eliminado; `esperarInicioJob` sigue usándose solo en el CLI local | `remote.cpp:160-166`; `verif/scripts/TC-029.sh` |
+| D4 | ~~Cero `EventLog` en el módulo de red~~ **Parcialmente resuelto en RF-22**: se registran desconexiones anómalas, conexiones rechazadas y errores internos con ventana de 60 s; faltan `UNAUTHORIZED` / `PROGRAM_NOT_ALLOWED` / `INVALID_*` | Hay evidencia forense de desconexiones y rechazos de red; los rechazos de autorización siguen sin rastro | `server.cpp:105-117,195-202,288-300`; `verif/scripts/TC-028.sh` |
+| D5 | `request_id` persistido es `red-tcp-<ambito>-<request_id>`; el valor original del cliente no aparece en `jobs.json` y el ámbito puede diferir del `id` visible | RNF-22 exige correlación directa solicitud↔job; ahora además el operador debe conocer el `ambito_trabajos`, no solo el registro | `remote.cpp:160-162`; `server.cpp:185`; `job.cpp:189-191` |
+| D6 | `UNAUTHORIZED` y `PROGRAM_NOT_ALLOWED` no llevan `message` | El CLI muestra el código en inglés como texto de error | `remote.cpp:24,143,152`; `client.cpp:199` |
 | D7 | `validarPrograma()` solo rechaza cadena vacía | `programas` de `network.json` acepta casi cualquier cadena; "ruta válida" no se verifica | `validator.cpp:92-115` |
 | D8 | Números mágicos duplicados: `262144` en `protocol.cpp:50` y `client.cpp:175`; `3 s` y `32` dispersos | Riesgo de divergencia al cambiar límites | `protocol.cpp`; `client.cpp`; `server.cpp` |
 | D9 | Un solo hilo y sin `TCP_NODELAY`/`SO_KEEPALIVE` | Latencia extra y sin detección temprana de pares muertos | `server.cpp:86-93` |
 | D10 | Solo IPv4 en cliente y servidor | Sin soporte IPv6 aunque la red lo requiera | `client.cpp:127`; `server.cpp:81` |
 | D11 | RNF-12 afirma que `red start` no inicia el scheduler | Contradice la implementación vigente y confunde al operador | `RNF-12:9` vs. `server.cpp:76-79` |
-| D12 | Documentación de pruebas apunta a `src/hermes/tests/`, inexistente | Verificación no reproducible siguiendo la doc | §6.8 |
-| D13 | El cliente crea los archivos locales de datos (`jobs.json`, `events.jsonl`) al ejecutar `red`, aunque no los use | Efecto lateral innecesario en equipos cliente | `main.cpp:31-32`; `data_paths.h:111-117` |
+| D12 | Documentación de pruebas apunta a `src/hermes/tests/`, inexistente | Verificación no reproducible siguiendo la doc; el merge actualizó RF-18/RF-20/RNF-13 pero **mantuvo** esas rutas | §6.8 |
+| D13 | Toda ejecución de Hermes crea el directorio de red y `network.json`, incluso comandos locales o `red job`; y el cliente sigue creando `jobs.json`/`events.jsonl` | Efecto lateral en equipos cliente y fallo de arranque si `~/.local/share/hermes/network` no es escribible | `main.cpp:33`; `remote.cpp:42-84`; `data_paths.h:111-117` |
 | D14 | Sin límite de frecuencia ni de conexiones por origen; el único control es el cupo total de 32 | Un solo origen autorizado puede agotar los cupos | `server.cpp:178` |
-| D15 | Errores de `network.json` incompleto provienen de `nlohmann::json` (`at()`/`get`) | Mensajes internos poco accionables para el operador | `remote.cpp:55-79` |
+| D15 | Errores de `network.json` incompleto provienen de `nlohmann::json` (`at()`/`get`) | Mensajes internos poco accionables para el operador | `remote.cpp:106-136` |
 | D16 | Una conexión por operación, sin reutilización | Handshake completo por cada `submit`/`filter`; coste, no defecto | `server.cpp:155` |
+| D17 | `red setup` escribe `config.json` y `network.json` sin transacción conjunta; si falla el segundo, el primero queda aplicado | Estado incoherente que exige reparación manual; el asistente solo avisa en `stderr` | `setup.cpp:413-420,442-445` |
+| D18 | `servidor`, `equipos` y `clientes[].tipo` se escriben pero nunca se validan ni se usan al arrancar | Deriva silenciosa: `servidor.interfaz` puede no coincidir con `config.interfaz`, `equipos[].acceso` puede apuntar a un registro inexistente | `remote.cpp:94-139`; `setup.cpp:369-392` |
+| D19 | El enlace `src/hermes/network` está versionado con el destino absoluto de otra máquina (`/home/leo/...`) y solo se repara con `argc == 1` | Clones nuevos ven un enlace roto hasta ejecutar `./hermes` sin argumentos; si hay un directorio real, el arranque falla | `src/hermes/network`; `data_paths.h:134-148`; `main.cpp:35` |
+| D20 | `red setup` solo se enruta con `argc == 3`; `red setup <algo>` cae al cliente y aborta con un error de uso; además exige `reglasRedValidas` y un `network.json` legible | Diagnóstico confuso para el operador y dependencia implícita del arranque previo | `main.cpp:57`; `setup.cpp:259-265` |
+| D21 | La excepción /32 amplía la superficie autorizable a cualquier host público concreto y el cliente ahora también conecta a él | Cambio de postura de seguridad que depende solo de la disciplina del operador; RNF-13 quedó relajado | `access.cpp:42-45`; `client.cpp:139` |
 
 ### 6.10 Casos borde no cubiertos por el diseño actual
 
-- **NAT/portproxy**: varios clientes tras la misma IP observada comparten identidad y permisos
-  (`RF-18:88-92`). No hay forma de distinguirlos.
+- **NAT/portproxy**: varios equipos tras la misma IP observada comparten registro, identidad y
+  permisos (`RF-18`). `setup` los separa en `equipos` solo para el firewall de Windows; Hermes sigue
+  sin distinguirlos y el ámbito de trabajos es común por diseño.
 - **Cambio de IP por DHCP**: obliga a editar `network.json` y reiniciar el servicio; no hay
-  recarga en caliente (`remote.cpp:40-83` se evalúa una sola vez al arrancar).
+  recarga en caliente (`remote.cpp:86-139` se evalúa una sola vez al arrancar).
 - **Cliente que aborta tras enviar `submit`**: el Job ya quedó persistido; no hay compensación ni
   consulta posterior por `request_id` en la CLI (solo por `job_id`).
 - **Respuesta mayor a 256 KiB** (p. ej. `list` de Jobs con argumentos muy largos): el servidor
   devuelve `RESPONSE_TOO_LARGE` y el cliente, al no requerir `request_id` en ese camino, lo trata
-  como respuesta inválida (D1).
+  como respuesta inválida (D2).
 - **Interfaz `0.0.0.0`**: expone el puerto en todas las interfaces; la protección real depende solo
   de `redes_permitidas` y del firewall externo.
 - **Programas intérprete** (`bash`, `time`): autorizar el intérprete autoriza cualquier código que
@@ -818,7 +959,18 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
 - **`hermes red start` no sobrevive a un reinicio**: no hay autostart ni daemonización
   (`RF-18:294-295`; `RNF-12:9-11`).
 - **Cambios de configuración en caliente**: imposibles; `interfaz`, `puerto` y `network.json` se leen
-  al arrancar y exigen reiniciar el servicio (`RF-20:33-35`; `remote.cpp:40-83`).
+  al arrancar y exigen reiniciar el servicio (`RF-20:33-35`; `remote.cpp:86-139`).
+- **Borrar `ambito_trabajos` para "renombrar"**: el registro cambia de identidad y deja de ver los
+  Jobs anteriores; además la plantilla y los ejemplos no lo documentan en el propio JSON
+  (`remote.cpp:113-117`). Es la forma más fácil de perder historial por error.
+- **`red setup` no comprueba conectividad**: valida formato, escribe archivos y, en WSL NAT, comprueba
+  que el proxy escuche; no prueba que PC-B llegue, que el firewall externo permita el puerto ni que
+  un trabajo remoto termine (`setup.cpp:394-440`).
+- **`red setup` en un host sin `network.json` previo**: depende de que `inicializarConfiguracionRemota()`
+  ya lo haya creado; si el archivo existe pero está corrupto, el asistente aborta sin escribirlo
+  (`setup.cpp:261-265`).
+- **`red setup` con una `redes_permitidas` inválida**: aborta antes de pedir datos
+  (`setup.cpp:260`), porque `cargarConfiguracion()` la habría vaciado y marcado `reglasRedValidas:false`.
 
 ---
 
@@ -831,11 +983,11 @@ Checklist por tipo de cambio. Marcar cada archivo que deba actualizarse **antes*
 | Capa | Archivo | Acción |
 | --- | --- | --- |
 | Protocolo | `src/hermes/src/network/protocol.cpp` | Añadir a la lista de operaciones autorizadas (`44`); decidir si requiere identidad |
-| Permisos | `src/hermes/src/network/remote.cpp:73-75` | Ampliar el conjunto válido de `operaciones` |
-| Despacho | `src/hermes/src/network/remote.cpp:88-155` | Implementar la rama y su validación de `params` |
+| Permisos | `src/hermes/src/network/remote.cpp:126-131` | Ampliar el conjunto válido de `operaciones` |
+| Despacho | `src/hermes/src/network/remote.cpp:141-211` | Implementar la rama y su validación de `params` |
 | Contrato | `src/hermes/include/network_remote.h` | Si cambia la firma o aparecen tipos nuevos |
 | CLI | `src/hermes/src/network/client.cpp:85-122` | Parseo, validación local y mapeo al nombre de operación |
-| Enrutado CLI | `src/hermes/src/main.cpp:54-57` | Solo si cambia el subcomando de nivel superior |
+| Enrutado CLI | `src/hermes/src/main.cpp:56-59` | Solo si cambia el subcomando de nivel superior |
 | Ayuda | `src/hermes/src/help/help.cpp` | Documentar el comando |
 | Config | `src/hermes/examples/network/network.json` | Añadir la operación a los ejemplos |
 | Docs | `RF-18`, `RNF-08`, este documento | Tabla de operaciones y errores |
@@ -856,15 +1008,19 @@ Checklist por tipo de cambio. Marcar cada archivo que deba actualizarse **antes*
 Regla práctica: **todo límite numérico debe declararse una sola vez** (idealmente en
 `network_protocol.h`) y consumirse desde cliente y servidor. Hoy `262144` está duplicado.
 
+El merge `858e3b1` no modificó esta capa: `network_protocol.h`, `protocol.cpp` y `client.cpp` siguen
+igual. Cualquier cambio de versión o de límites es una decisión nueva, no una herencia del merge.
+
 ### 7.3 Nueva regla de autorización o de direcciones
 
 | Archivo | Acción |
 | --- | --- |
 | `include/network_access.h` / `src/network/access.cpp` | Espacios admitidos, contención, normalización |
 | `include/config.h` / `src/config/config.cpp` | Si aparece una clave nueva o cambia el default |
-| `src/config/config_update.cpp:249-258,295-297` | Validación y persistencia atómicas |
-| `src/network/remote.cpp:62-69` | Si la regla afecta `direcciones` de clientes |
-| `RF-20`, `RNF-13` | Política y espacios |
+| `src/config/config_update.cpp:249-262,298-313` | Validación y persistencia atómicas; `agregarRedesPermitidas` fusiona sin borrar reglas |
+| `src/network/remote.cpp:118-125` | Si la regla afecta `direcciones` de clientes |
+| `src/network/setup.cpp:60-66,276-278` | `pedirIP()` y la comprobación de que la IP pertenece al equipo; `reglaRedValida()` decide qué se ofrece |
+| `RF-20`, `RNF-13` | Política y espacios (la excepción /32 está aquí) |
 | `docs/user-guide/red-wsl-pc-a-pc-b.md` | Procedimiento operativo y tabla de diagnóstico |
 | `verif/` | Pruebas de límites (públicas, CIDR fuera de espacio, `0.0.0.0/0`, lista inválida) |
 
@@ -876,7 +1032,7 @@ Regla práctica: **todo límite numérico debe declararse una sola vez** (idealm
 | `src/job/job.cpp:102-147` | Comparación de duplicados (si el campo participa en la idempotencia) |
 | `src/job/presentation.cpp:5-18` | `jobDesdeJson()` |
 | `src/job/presentation.cpp:62-68` | `jsonDesdeJob()` |
-| `src/network/remote.cpp:28-34` | `proyectar()`: decidir si el campo se expone por red |
+| `src/network/remote.cpp:30-36` | `proyectar()`: decidir si el campo se expone por red |
 | `src/scheduler/scheduler.cpp` | Transiciones, recuperación y `atenderCancelacionesRemotas()` |
 | `RF-18`, `RNF-22` | Contrato visible y correlación |
 
@@ -887,7 +1043,7 @@ explícitamente.
 
 | Archivo | Punto exacto |
 | --- | --- |
-| `src/network/remote.cpp:144-154` | Mapeo `CodigoCancelacion → código de protocolo` |
+| `src/network/remote.cpp:200-210` | Mapeo `CodigoCancelacion → código de protocolo` |
 | `src/cancel/cancel.cpp:12-111` | Transiciones y comprobación atómica de propietario |
 | `src/scheduler/scheduler.cpp:825-850` | Escalado `SIGTERM → SIGKILL` cada 200 ms |
 | `src/network/client.cpp:196-211` | Mensajes y códigos de salida |
@@ -898,10 +1054,10 @@ explícitamente.
 
 | Archivo | Acción |
 | --- | --- |
-| `src/main.cpp` | Enrutado y validación de argumentos |
+| `src/main.cpp:56-59` | Enrutado y validación de argumentos; recordar que el subcomando solo se reconoce con `argc == 3` |
 | `src/network/client.cpp` | Uso (`76`), parseo y mensajes |
-| `src/network.h` | Firma si cambia el contrato |
-| `src/help/help.cpp` | Texto de ayuda y ejemplos |
+| `src/network.h` | Firma si cambia el contrato (hoy `iniciarServidorRed`, `configurarRedInteractiva`, `ejecutarClienteRed`) |
+| `src/help/help.cpp:26-32` | Texto de ayuda y ejemplos |
 | `RF-18` | Tabla Local/Remoto |
 | `verif/` | Caso funcional + comparación con el CLI local |
 
@@ -914,6 +1070,8 @@ make -C src/hermes          # find src -name '*.cpp' incluye archivos nuevos
 - Cualquier `.cpp` nuevo bajo `src/hermes/src/` se compila automáticamente (`Makefile:7`); toda
   cabecera nueva debe estar en `src/hermes/include/` para entrar en `-Iinclude` y en la dependencia
   `$(wildcard include/*.h)`.
+- No hay paso `init`: el primer arranque crea `~/.local/share/hermes/network/network.json` y el enlace
+  `src/hermes/network` (§4.2). `setup.cpp` entra por el mismo `find`, sin tocar el `Makefile`.
 - Si se añade una dependencia externa, actualizar `Makefile` (`CXXFLAGS`, `LDFLAGS`).
 - Actualizar `verif/verification-plan/traceability-matrix.md` con el requisito ↔ caso ↔ estado.
 - Si el cambio altera comportamiento observable del CLI remoto, añadir el caso a
@@ -935,7 +1093,24 @@ Restricciones del arnés de pruebas (ver §6.8):
   cerrarlo con `SIGTERM` verificando que el puerto queda libre.
 
 
-### 7.8 Archivos que **no** deben tocarse sin decisión explícita
+### 7.8 Cambios en el asistente `red setup` o en el esquema de `network.json`
+
+| Archivo | Qué revisar |
+| --- | --- |
+| `src/network/setup.cpp:251-447` | Flujo de preguntas, detección WSL (`usaProxyWindows`), generación de PowerShell, confirmaciones |
+| `src/network/remote.cpp:42-84` | Plantilla inicial; cualquier clave nueva debe añadirse aquí y en `examples/network/network.json` |
+| `src/network/remote.cpp:94-139` | `interpretarConfiguracionRemota()`: única validación que se aplica al arrancar. Toda clave nueva que deba validarse va aquí |
+| `src/network/server.cpp:185` | Resolución `identidades[ip] → ambitosTrabajos`; si cambia el ámbito, cambia el propietario de los Jobs |
+| `src/hermes/include/network_remote.h` | `ConfiguracionRemota` y firmas públicas |
+| `docs/user-guide/red-setup.md` | Flujo, ejemplos y límites del asistente |
+| `RF-18`, `RF-20`, `RNF-13` | Contrato y política de direcciones |
+| `verif/` | No existe ningún caso de `setup`; el primero debe cubrir modo directo, WSL NAT, `ambito_trabajos` duplicado y archivo cambiado durante la interacción |
+
+Regla práctica: `servidor` y `equipos` son **metadatos sin validación**. Si en el futuro deben influir
+en la autorización o en el bind, hay que añadirlos a `interpretarConfiguracionRemota()` y a
+`iniciarServidorRed()`; hoy no se leen.
+
+### 7.9 Archivos que **no** deben tocarse sin decisión explícita
 
 - `src/hermes/src/storage/storage.cpp`: atomicidad y bloqueo son la base de la idempotencia y de la
   recuperación; cualquier cambio afecta a red y a local por igual.
@@ -960,6 +1135,7 @@ Restricciones del arnés de pruebas (ver §6.8):
 | Idempotencia | `docs/technical-guide/2-Nucleo del proyecto/RF-27.solicitudes-idempotentes.md` |
 | Correlación logs | `docs/technical-guide/2-Nucleo del proyecto/RNF-22-correlacion-solicitudes-trabajos-logs.md` |
 | Operación WSL/Windows | `docs/user-guide/red-wsl-pc-a-pc-b.md` |
+| Asistente de configuración | `docs/user-guide/red-setup.md` |
 | Plantilla de permisos | `src/hermes/examples/network/network.json` |
 
 ## Anexo B. Invocaciones y diagnóstico documentados
@@ -967,6 +1143,7 @@ Restricciones del arnés de pruebas (ver §6.8):
 Invocaciones del CLI remoto (`RF-18:112-117`; `red-wsl-pc-a-pc-b.md:320-357`):
 
 ```sh
+./hermes red setup                                  # asistente en PC-A: registra equipo y LAN/WSL
 ./hermes red start                                  # servidor, primer plano, en PC-A
 ./hermes red job  192.168.1.74 sleep 120
 ./hermes red job  192.168.1.74 --request-id prueba.red-001 sleep 30
@@ -977,6 +1154,10 @@ Invocaciones del CLI remoto (`RF-18:112-117`; `red-wsl-pc-a-pc-b.md:320-357`):
 ./hermes red filter 192.168.1.74 programa sleep
 ./hermes red cancel 192.168.1.74 7
 ```
+
+`red setup` (documentado en `red-setup.md`) escribe `config.json` y `network.json`, habilita la red y,
+en WSL NAT, genera `setup-windows-<id>.ps1`. No inicia el servidor ni verifica conectividad. El nombre
+del subcomando solo se reconoce con `argc == 3`: `red setup extra` cae al cliente.
 
 `red job` no espera la finalización; el resultado se consulta con `red filter <host> id <ID>`.
 

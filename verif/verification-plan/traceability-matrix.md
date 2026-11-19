@@ -24,7 +24,7 @@
 | RF-19    |                     |             |          |           |             | Pendiente   |                     |
 | RF-20    |                     |             |          |           |             | Pendiente   |                     |
 | RF-21    |                     |             |          |           |             | Pendiente   |                     |
-| RF-22    |                     |             |          |           |             | Pendiente   |                     |
+| RF-22 | Desconexión del cliente sin terminar el servicio ni corromper trabajos | Alta | Prueba | TC-030, TC-031, TC-032, TC-033, TC-034 | verif/scripts/TC-030.sh…TC-034.sh + verif/results/results_TC-030.md…TC-034.md ([PASS], 2026-11-18); documentación final en `docs/technical-guide/2-Nucleo del proyecto/RF-22.desconexion-cliente.md`; matriz AC1-AC7 en `docs/technical-guide/2-Nucleo del proyecto/DESARROLLO-RF-22.desconexion-cliente.md` | PASS | Riesgo residual R1: `flock` bloqueante sin plazo (`storage.cpp:43`, `event_log.cpp:195`) |
 | RF-23    | Rechazo y registro de solicitudes que exceden límites configurados | Alta | Prueba | TC-023 | verif/scripts/TC-023.sh ([PASS]); eventos WARN en events.jsonl | PASS | - |
 | RF-24    |                     |             |          |           |             | Pendiente   |                     |
 | RF-25 | Rechazo explícito de nuevas solicitudes sin bloquear el sistema ni perder trabajos aceptados cuando la cola alcanza su capacidad. | Alta | Prueba | TC-016 | verif/scripts/TC-016.sh + verif/results/tc016.log ([PASS]) | Pass | - |
