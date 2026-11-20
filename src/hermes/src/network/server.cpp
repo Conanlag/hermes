@@ -159,6 +159,8 @@ int iniciarServidorRed() {
             Reloj::time_point limite;
             bool cerrado = false;
             Motivo motivo = Motivo::CierreNormal;
+            // RF-28: desenlace de la solicitud atendida en esta conexión.
+            DetalleSolicitud detalle;
         };
         std::vector<std::unique_ptr<Cliente>> clientes;
         while (!detener) {
@@ -192,13 +194,39 @@ int iniciarServidorRed() {
                 cliente.motivo = motivo;
                 cliente.cerrado = true;
             };
+            // RF-28: la ventana de 60 s solo amortigua el ruido previo al
+            // protocolo (sin bytes recibidos). Toda solicitud que empezó a
+            // recibirse se documenta siempre con su desenlace.
             auto registrar = [](const Cliente& cliente) {
-                if (!avisoPermitido(cliente.motivo)) return;
-                EventLog::log_event_system(EventLevel::WARN, "Cliente desconectado", {
-                    {"ip", cliente.ip},
-                    {"motivo", textoMotivo(cliente.motivo)},
-                    {"bytes_recibidos", cliente.entrada.size()}
-                });
+                try {
+                    if (cliente.motivo == Motivo::CierreNormal) return;
+                    const auto bytes = cliente.entrada.size();
+                    if (!cliente.detalle.procesada && bytes == 0) {
+                        if (!avisoPermitido(cliente.motivo)) return;
+                        (void)EventLog::log_event_system(EventLevel::WARN, "Cliente desconectado", {
+                            {"ip", cliente.ip},
+                            {"motivo", textoMotivo(cliente.motivo)},
+                            {"bytes_recibidos", bytes}
+                        });
+                        return;
+                    }
+                    nlohmann::json contexto{
+                        {"ip", cliente.ip},
+                        {"motivo", textoMotivo(cliente.motivo)},
+                        {"resultado", !cliente.detalle.procesada
+                            ? "SIN_EFECTO"
+                            : (cliente.detalle.aceptada ? "ACEPTADA" : "RECHAZADA")},
+                        {"bytes_recibidos", bytes}
+                    };
+                    if (!cliente.detalle.operacion.empty()) contexto["operacion"] = cliente.detalle.operacion;
+                    if (!cliente.detalle.requestId.empty()) contexto["request_id"] = cliente.detalle.requestId;
+                    if (!cliente.identidad.empty()) contexto["identidad"] = cliente.identidad;
+                    if (cliente.detalle.jobId != 0) contexto["job_id"] = cliente.detalle.jobId;
+                    if (!cliente.detalle.error.empty()) contexto["error"] = cliente.detalle.error;
+                    (void)EventLog::log_event_system(EventLevel::WARN, "Solicitud interrumpida", contexto);
+                } catch (...) {
+                    // El registro nunca puede tumbar el hilo de red.
+                }
             };
             for (std::size_t i = 0; i < clientes.size(); ++i) {
                 auto& cliente = *clientes[i];
@@ -206,34 +234,48 @@ int iniciarServidorRed() {
                 // Un fallo al atender a un cliente nunca puede terminar el
                 // servicio: se cierra ese cliente y se sigue con el resto.
                 try {
-                    if (evento & (POLLERR | POLLNVAL)) {
-                        cliente.motivo = Motivo::ErrorSocket;
-                        cliente.cerrado = true;
-                        continue;
-                    }
-                    // Hang up con respuesta pendiente: ya no hay par que lea.
-                    if ((evento & POLLHUP) && !cliente.salida.empty()) {
-                        cliente.motivo = Motivo::ErrorEscritura;
-                        cliente.cerrado = true;
-                        continue;
-                    }
-                    if (cliente.salida.empty() && (evento & (cliente.esperado | POLLHUP))) {
+                    const bool errorTerminal = (evento & (POLLERR | POLLNVAL)) != 0;
+                    const bool colgado = (evento & POLLHUP) != 0;
+                    // RF-28: los bytes que llegaron antes del corte se atienden
+                    // primero. Clasificar el cierre antes de leer perdía el
+                    // desenlace de solicitudes ya completas (RST tras enviar).
+                    if (cliente.salida.empty() &&
+                        (evento & (cliente.esperado | POLLHUP | POLLERR))) {
                         char buffer[4096];
                         const auto leidos = recv(cliente.socket.valor, buffer, sizeof(buffer), 0);
                         if (leidos > 0) {
                             cliente.entrada.append(buffer, static_cast<std::size_t>(leidos));
                             const auto fin = cliente.entrada.find('\n');
                             if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
-                                (fin != std::string::npos && fin > MAX_MENSAJE_RED))
+                                (fin != std::string::npos && fin > MAX_MENSAJE_RED)) {
+                                cliente.detalle.procesada = true;
+                                cliente.detalle.error = "MESSAGE_TOO_LARGE";
                                 responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
-                            else if (fin != std::string::npos)
-                                responder(cliente, procesarSolicitudRed(cliente.entrada.substr(0, fin), cliente.identidad, cliente.permisos));
+                            } else if (fin != std::string::npos) {
+                                DetalleSolicitud detalle;
+                                auto respuesta = procesarSolicitudRedDetallada(
+                                    cliente.entrada.substr(0, fin), cliente.identidad,
+                                    cliente.permisos, detalle);
+                                cliente.detalle = std::move(detalle);
+                                responder(cliente, std::move(respuesta));
+                            }
                         } else if (leidos == 0) {
                             despedida(cliente, "INCOMPLETE_MESSAGE", Motivo::FinSinMensaje);
                         } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
-                            cliente.motivo = Motivo::ErrorLectura;
+                            cliente.motivo = errorTerminal ? Motivo::ErrorSocket : Motivo::ErrorLectura;
                             cliente.cerrado = true;
                         }
+                    }
+                    if (!cliente.cerrado && errorTerminal) {
+                        cliente.motivo = Motivo::ErrorSocket;
+                        cliente.cerrado = true;
+                        continue;
+                    }
+                    // Hang up con respuesta pendiente: ya no hay par que lea.
+                    if (!cliente.cerrado && colgado && !cliente.salida.empty()) {
+                        cliente.motivo = Motivo::ErrorEscritura;
+                        cliente.cerrado = true;
+                        continue;
                     }
                     if (!cliente.cerrado && !cliente.salida.empty() && (evento & cliente.esperado)) {
                         const auto enviados = send(cliente.socket.valor,

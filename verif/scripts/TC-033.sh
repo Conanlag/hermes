@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # RF-22 / AC7 - T-12.
-# V8: las desconexiones anómalas quedan en la bitácora, con un máximo de un
-# aviso por motivo cada 60 s, y un ping normal no genera ruido.
+# V8: el ruido previo al protocolo (conexiones cerradas sin enviar datos) queda
+# en la bitácora con un máximo de un aviso por motivo cada 60 s, y un ping
+# normal no genera ruido. RF-28 acotó la ventana a ese caso: una solicitud que
+# ya empezó a recibirse se documenta siempre (TC-035 a TC-038).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HERMES="$REPO/src/hermes/hermes"
-PUERTO=45820
+PUERTO=45843
 TEST_ROOT="$(mktemp -d)"
 export HOME="$TEST_ROOT/home"
 mkdir -p "$HOME"
@@ -16,6 +18,19 @@ EVENTS="$DATA_DIR/events.jsonl"
 RESULTS_DIR="$REPO/verif/results"
 RESULTS_FILE="$RESULTS_DIR/results_TC-033.md"
 mkdir -p "$NET_DIR" "$RESULTS_DIR"
+CONF_DIR="$HOME/.config/hermes"
+mkdir -p "$CONF_DIR"
+
+# Puerto propio: la prueba no debe chocar con un servidor en marcha del usuario.
+cat >"$CONF_DIR/config.json" <<JSON
+{
+  "interfaz": "127.0.0.1",
+  "puerto": $PUERTO,
+  "redes_permitidas": ["127.0.0.0/8"],
+  "trabajos_maximos": 4,
+  "max_cola": 5
+}
+JSON
 
 cat >"$NET_DIR/network.json" <<'JSON'
 {
@@ -113,17 +128,14 @@ contar() {
     grep -c "$patron" "$EVENTS" || true
 }
 
-# Cinco desconexiones anómalas del mismo tipo.
+# Cinco cortes antes de recibir datos: ruido previo al protocolo. RF-28 deja
+# fuera de la ventana toda solicitud que ya empezó a recibirse, así que este
+# caso usa conexiones que se cierran sin enviar un solo byte.
 python3 - "$PUERTO" <<'PY'
 import socket, sys
 puerto = int(sys.argv[1])
 for _ in range(5):
     s = socket.create_connection(("127.0.0.1", puerto), timeout=5)
-    s.sendall(b"{")
-    s.shutdown(socket.SHUT_WR)
-    s.settimeout(5)
-    while s.recv(4096):
-        pass
     s.close()
 PY
 sleep 0.5

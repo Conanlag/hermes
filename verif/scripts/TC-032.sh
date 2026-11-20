@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HERMES="$REPO/src/hermes/hermes"
-PUERTO=45820
+PUERTO=45842
 CICLOS="${1:-100}"
 TEST_ROOT="$(mktemp -d)"
 export HOME="$TEST_ROOT/home"
@@ -16,6 +16,19 @@ NET_DIR="$HOME/.local/share/hermes/network"
 RESULTS_DIR="$REPO/verif/results"
 RESULTS_FILE="$RESULTS_DIR/results_TC-032.md"
 mkdir -p "$NET_DIR" "$RESULTS_DIR"
+CONF_DIR="$HOME/.config/hermes"
+mkdir -p "$CONF_DIR"
+
+# Puerto propio: la prueba no debe chocar con un servidor en marcha del usuario.
+cat >"$CONF_DIR/config.json" <<JSON
+{
+  "interfaz": "127.0.0.1",
+  "puerto": $PUERTO,
+  "redes_permitidas": ["127.0.0.0/8"],
+  "trabajos_maximos": 4,
+  "max_cola": 5
+}
+JSON
 
 cat >"$NET_DIR/network.json" <<'JSON'
 {
