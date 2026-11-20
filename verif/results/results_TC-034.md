@@ -40,3 +40,31 @@ job ID: 2
 PASS V9b: deduplicación intacta y Job 1 en estado SUCCEEDED.
 PASS: RF-22 T-13 (V9) sin fallos.
 ```
+
+## Ejecucion: 2026-11-19 21:14:58 -0600
+
+```text
+job ID: 1
+PID: pendiente (en cola)
+PASS V9a: 'red job' respondió en 21 ms con el Job en cola.
+job ID: 2
+PID: pendiente (en cola)
+job ID: 2
+[34mSolicitud duplicada; se reutiliza el Job existente.[0m
+PASS V9b: deduplicación intacta y Job 1 en estado SUCCEEDED.
+PASS: RF-22 T-13 (V9) sin fallos.
+```
+
+## Ejecucion: 2026-11-19 21:22:24 -0600
+
+```text
+job ID: 1
+PID: pendiente (en cola)
+PASS V9a: 'red job' respondió en 19 ms con el Job en cola.
+job ID: 2
+PID: pendiente (en cola)
+job ID: 2
+[34mSolicitud duplicada; se reutiliza el Job existente.[0m
+PASS V9b: deduplicación intacta y Job 1 en estado SUCCEEDED.
+PASS: RF-22 T-13 (V9) sin fallos.
+```

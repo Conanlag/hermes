@@ -121,8 +121,12 @@ int ejecutarClienteRed(int argc, char* argv[]) {
             }
         } else throw std::invalid_argument(uso);
         auto enviar = [&]() -> json {
-            const auto solicitud = json({{"version", 1}, {"request_id", id}, {"operation", remota}, {"params", params}}).dump() + '\n';
-            if (solicitud.size() > MAX_MENSAJE_RED + 1) throw std::invalid_argument("Solicitud demasiado grande");
+            // RNF-14: el límite de petición se aplica al payload sin el '\n'.
+            const auto carga = json({{"version", 1}, {"request_id", id},
+                {"operation", remota}, {"params", params}}).dump();
+            if (carga.size() > MAX_MENSAJE_RED)
+                throw std::invalid_argument("Solicitud demasiado grande: excede el máximo de la red");
+            const auto solicitud = carga + '\n';
             addrinfo pistas{};
             pistas.ai_family = AF_INET;
             pistas.ai_socktype = SOCK_STREAM;
@@ -172,12 +176,46 @@ int ejecutarClienteRed(int argc, char* argv[]) {
                 else if (cantidad < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
                     esperar(socket.fd, POLLIN, limite);
                 else throw std::runtime_error("El servidor cerró o rechazó la conexión");
-                if (respuesta.size() > 262144) throw std::runtime_error("Respuesta demasiado grande");
+                if (respuesta.size() > MAX_RESPUESTA_RED)
+                    throw std::runtime_error("Respuesta demasiado grande: excede el máximo de la red");
             }
-            const auto recibida = json::parse(respuesta.substr(0, respuesta.find('\n')));
-            if (!recibida.is_object() || recibida.value("request_id", std::string{}) != id ||
-                recibida.value("version", 0) != 1 || !recibida.contains("ok") || !recibida["ok"].is_boolean())
-                throw std::runtime_error("Respuesta inválida del servidor");
+            const auto cuerpo = respuesta.substr(0, respuesta.find('\n'));
+            if (cuerpo.find('\0') != std::string::npos)
+                throw std::runtime_error("Respuesta inválida del servidor: contiene un byte nulo");
+            json recibida;
+            try {
+                recibida = json::parse(cuerpo);
+            } catch (const std::exception&) {
+                // RNF-14: el diagnóstico debe ser propio del cliente; el texto
+                // de la librería de JSON no es un mensaje de usuario.
+                throw std::runtime_error("Respuesta inválida del servidor: JSON mal formado");
+            }
+            auto invalida = [](const std::string& detalle) {
+                return std::runtime_error("Respuesta inválida del servidor: " + detalle);
+            };
+            if (!recibida.is_object()) throw invalida("el sobre no es un objeto");
+            if (!recibida.contains("version") || !recibida["version"].is_number_integer() ||
+                recibida["version"] != 1)
+                throw invalida("version ausente o distinta de 1");
+            if (!recibida.contains("request_id")) throw invalida("falta request_id");
+            // Un request_id nulo solo lo emite errorProtocolo(): identifica un
+            // error de protocolo y no se coteja con el identificador local.
+            const bool idNulo = recibida["request_id"].is_null();
+            if (!idNulo && !recibida["request_id"].is_string())
+                throw invalida("request_id con tipo no válido");
+            if (!idNulo && recibida["request_id"].get<std::string>() != id)
+                throw invalida("request_id no coincide con la solicitud");
+            if (!recibida.contains("ok") || !recibida["ok"].is_boolean())
+                throw invalida("ok ausente o no booleano");
+            const bool aceptada = recibida["ok"].get<bool>();
+            if (idNulo && aceptada) throw invalida("sobre de error con ok verdadero");
+            if (aceptada) {
+                if (!recibida.contains("result") || !recibida["result"].is_object())
+                    throw invalida("result ausente o no es objeto");
+            } else if (!recibida.contains("error") || !recibida["error"].is_string() ||
+                       recibida["error"].get<std::string>().empty()) {
+                throw invalida("error ausente o vacío");
+            }
             return recibida;
         };
         bool encontrados = false;

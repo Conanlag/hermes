@@ -147,14 +147,14 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
                 !params.contains("argumentos") || !params["argumentos"].is_array())
                 return error("INVALID_PARAMS");
             const auto programa = params["programa"].get<std::string>();
-            if (!validarPrograma(programa).esValido || programa.find('\0') != std::string::npos ||
+            if (!validarPrograma(programa).esValido || !validarTextoRed(programa).esValido ||
                 !contiene(permisos.programas, programa))
                 return error("PROGRAM_NOT_ALLOWED");
             std::vector<std::string> argumentos;
             for (const auto& argumento : params["argumentos"]) {
                 if (!argumento.is_string()) return error("INVALID_PARAMS");
                 const auto valor = argumento.get<std::string>();
-                if (valor.find('\0') != std::string::npos) return error("INVALID_PARAMS");
+                if (!validarTextoRed(valor).esValido) return error("INVALID_PARAMS");
                 argumentos.push_back(valor);
             }
             const auto config = cargarConfiguracion();
@@ -177,6 +177,8 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
                     !params.contains("valor") || !params["valor"].is_string()) return error("INVALID_PARAMS");
                 tipo = params["tipo"].get<std::string>();
                 valor = params["valor"].get<std::string>();
+                if (!validarTextoRed(tipo).esValido || !validarTextoRed(valor).esValido)
+                    return error("INVALID_PARAMS");
                 if ((tipo != "status" && tipo != "programa") ||
                     (tipo == "status" && !validarStatusTexto(valor).esValido) ||
                     (tipo == "programa" && !validarPrograma(valor).esValido)) return error("INVALID_PARAMS");

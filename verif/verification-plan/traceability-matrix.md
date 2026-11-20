@@ -46,7 +46,7 @@
 | RNF-11 | Escritura atómica y duradera (O_EXCL, fsync, rename) para evitar dejar jobs.json parcialmente actualizado o corrupto. | Crítica | Prueba | TC-007 | verif/scripts/TC-007.sh + verif/results/results_TC-007.md ([PASS]) | Pendiente | - |
 | RNF-12   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-13   |                     |             |          |           |             | Pendiente   |                     |
-| RNF-14   |                     |             |          |           |             | Pendiente   |                     |
+| RNF-14 | Validación de longitud y formato de todos los mensajes de red: topes únicos de petición y respuesta, rechazo determinista de JSON inválido, UTF-8 corrupto, bytes nulos, profundidad excesiva y claves no permitidas, coherencia del sobre en ambos extremos y registro acotado de los rechazos. | Alta | Prueba | TC-039, TC-040, TC-041, TC-042 | verif/scripts/TC-039.sh…TC-042.sh + verif/results/results_TC-039.md…TC-042.md ([PASS], 2026-11-19); regresión TC-030…TC-038 en PASS; compilación limpia con `-Wall -Wextra` | PASS | Riesgo residual R3: el rechazo de formato se registra con ventana de 60 s por código, por lo que un mismo código sostenido solo deja el primer evento del minuto. |
 | RNF-15   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-16   |                     |             |          |           |             | Pendiente   |                     |
 | RNF-17   |                     |             |          |           |             | Pendiente   |                     |

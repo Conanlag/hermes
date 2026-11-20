@@ -5,6 +5,22 @@
 
 namespace hermes {
 using json = nlohmann::json;
+
+namespace {
+// El callback de profundidad de nlohmann comparte el tipo de excepción con el
+// resto de errores de parseo; un tipo propio permite responder TOO_DEEP sin
+// confundirlo con INVALID_JSON.
+struct ProfundidadExcesiva : std::exception {
+    const char* what() const noexcept override { return "Profundidad excesiva"; }
+};
+
+// RNF-14: solo estas claves son válidas en el nivel superior del sobre.
+bool claveSuperiorConocida(const std::string& clave) {
+    return clave == "version" || clave == "request_id" ||
+           clave == "operation" || clave == "params";
+}
+}
+
 std::string errorProtocolo(const std::string& codigo) {
     return json({{"version", 1}, {"request_id", nullptr}, {"ok", false}, {"error", codigo}}).dump() + '\n';
 }
@@ -12,32 +28,33 @@ std::string errorProtocolo(const std::string& codigo) {
 std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std::string& identidad,
     const PermisosRemotos* permisos, DetalleSolicitud& detalle) {
     detalle = DetalleSolicitud{};
-    if (mensaje.size() > MAX_MENSAJE_RED) {
+    // Rechazo previo a disponer de un request_id válido: el sobre de error no
+    // puede citar el identificador del cliente.
+    auto rechazo = [&](const char* codigo) {
         detalle.procesada = true;
-        detalle.error = "MESSAGE_TOO_LARGE";
-        return errorProtocolo("MESSAGE_TOO_LARGE");
-    }
+        detalle.formatoInvalido = true;
+        detalle.error = codigo;
+        return errorProtocolo(codigo);
+    };
+    if (mensaje.size() > MAX_MENSAJE_RED) return rechazo("MESSAGE_TOO_LARGE");
+    if (mensaje.find('\0') != std::string::npos) return rechazo("NUL_BYTE");
+    if (!utf8Valido(mensaje)) return rechazo("INVALID_UTF8");
     json solicitud;
     try {
         solicitud = json::parse(mensaje, [](int profundidad, json::parse_event_t, json&) {
-            if (profundidad > 32) throw std::invalid_argument("Profundidad excesiva");
+            if (profundidad > MAX_PROFUNDIDAD_JSON) throw ProfundidadExcesiva{};
             return true;
         });
+    } catch (const ProfundidadExcesiva&) {
+        return rechazo("TOO_DEEP");
     } catch (const std::exception&) {
-        detalle.procesada = true;
-        detalle.error = "INVALID_JSON";
-        return errorProtocolo("INVALID_JSON");
+        return rechazo("INVALID_JSON");
     }
-    if (!solicitud.is_object()) {
-        detalle.procesada = true;
-        detalle.error = "INVALID_REQUEST";
-        return errorProtocolo("INVALID_REQUEST");
-    }
-    if (!solicitud.contains("request_id") || !solicitud["request_id"].is_string()) {
-        detalle.procesada = true;
-        detalle.error = "INVALID_REQUEST_ID";
-        return errorProtocolo("INVALID_REQUEST_ID");
-    }
+    if (!solicitud.is_object()) return rechazo("INVALID_REQUEST");
+    for (auto it = solicitud.begin(); it != solicitud.end(); ++it)
+        if (!claveSuperiorConocida(it.key())) return rechazo("INVALID_REQUEST");
+    if (!solicitud.contains("request_id") || !solicitud["request_id"].is_string())
+        return rechazo("INVALID_REQUEST_ID");
     const std::string id = solicitud["request_id"].get<std::string>();
     detalle.requestId = id;
     auto responder = [&](const char* codigo) {
@@ -46,18 +63,25 @@ std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std:
         detalle.error = codigo;
         return json({{"version", 1}, {"request_id", id}, {"ok", false}, {"error", codigo}}).dump() + '\n';
     };
-    if (!validarRequestId(id).esValido) return responder("INVALID_REQUEST_ID");
+    // Rechazo de protocolo con request_id ya interpretado.
+    auto rechazoConId = [&](const char* codigo) {
+        detalle.formatoInvalido = true;
+        return responder(codigo);
+    };
+    if (!validarRequestId(id).esValido) return rechazoConId("INVALID_REQUEST_ID");
     if (!solicitud.contains("version") || !solicitud["version"].is_number_integer())
-        return responder("INVALID_VERSION");
-    if (solicitud["version"] != 1) return responder("UNSUPPORTED_VERSION");
+        return rechazoConId("INVALID_VERSION");
+    if (solicitud["version"] != 1) return rechazoConId("UNSUPPORTED_VERSION");
     if (!solicitud.contains("operation") || !solicitud["operation"].is_string())
-        return responder("INVALID_OPERATION");
-    if (!solicitud.contains("params") || !solicitud["params"].is_object())
-        return responder("INVALID_PARAMS");
+        return rechazoConId("INVALID_OPERATION");
     const auto operacion = solicitud["operation"].get<std::string>();
+    if (operacion.empty() || operacion.size() > MAX_OPERACION_RED)
+        return rechazoConId("INVALID_OPERATION");
+    if (!solicitud.contains("params") || !solicitud["params"].is_object())
+        return rechazoConId("INVALID_PARAMS");
     detalle.operacion = operacion;
     if (operacion == "ping") {
-        if (!solicitud["params"].empty()) return responder("INVALID_PARAMS");
+        if (!solicitud["params"].empty()) return rechazoConId("INVALID_PARAMS");
         detalle.procesada = true;
         detalle.aceptada = true;
         return json({{"version", 1}, {"request_id", id}, {"ok", true},
@@ -69,7 +93,7 @@ std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std:
         resultado["version"] = 1;
         resultado["request_id"] = id;
         auto serializado = resultado.dump() + '\n';
-        if (serializado.size() > 262144) return responder("RESPONSE_TOO_LARGE");
+        if (serializado.size() > MAX_RESPUESTA_RED) return responder("RESPONSE_TOO_LARGE");
         // El desenlace se conoce únicamente aquí; se propaga a server.cpp sin
         // alterar el sobre JSON ni la firma pública de procesarSolicitudRed.
         detalle.procesada = true;
@@ -85,7 +109,7 @@ std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std:
         }
         return serializado;
     }
-    return responder("UNKNOWN_OPERATION");
+    return rechazoConId("UNKNOWN_OPERATION");
 }
 
 std::string procesarSolicitudRed(const std::string& mensaje, const std::string& identidad,

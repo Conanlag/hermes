@@ -115,6 +115,29 @@ bool avisoPermitido(Motivo motivo) {
     ultimo[indice] = ahora;
     return true;
 }
+
+// RNF-14: ventana de 60 s por código de rechazo. El primer rechazo de cada
+// código siempre se registra, de modo que el diagnóstico real no se pierde.
+// Un código ausente de la tabla se registra siempre: lo genera el servidor y
+// no procede del cliente, así que no puede usarse para saturar la bitácora.
+bool rechazoPermitido(const std::string& codigo) {
+    static constexpr std::array<const char*, 12> CODIGOS{{
+        "MESSAGE_TOO_LARGE", "NUL_BYTE", "INVALID_UTF8", "TOO_DEEP", "INVALID_JSON",
+        "INVALID_REQUEST", "INVALID_REQUEST_ID", "INVALID_VERSION", "UNSUPPORTED_VERSION",
+        "INVALID_OPERATION", "INVALID_PARAMS", "UNKNOWN_OPERATION"
+    }};
+    static std::array<Reloj::time_point, CODIGOS.size()> ultimo{};
+    static std::array<bool, CODIGOS.size()> usado{};
+    for (std::size_t indice = 0; indice < CODIGOS.size(); ++indice) {
+        if (codigo != CODIGOS[indice]) continue;
+        const auto ahora = Reloj::now();
+        if (usado[indice] && ahora - ultimo[indice] < std::chrono::seconds(60)) return false;
+        usado[indice] = true;
+        ultimo[indice] = ahora;
+        return true;
+    }
+    return true;
+}
 }
 
 namespace hermes {
@@ -194,11 +217,31 @@ int iniciarServidorRed() {
                 cliente.motivo = motivo;
                 cliente.cerrado = true;
             };
+            // RNF-14: documenta el rechazo de protocolo en el momento en que se
+            // produce, no al cerrar la conexión.
+            auto registrarRechazo = [](const Cliente& cliente, unsigned bytes) noexcept {
+                try {
+                    if (!rechazoPermitido(cliente.detalle.error)) return;
+                    nlohmann::json contexto{
+                        {"ip", cliente.ip},
+                        {"identidad", cliente.identidad},
+                        {"codigo", cliente.detalle.error},
+                        {"bytes_recibidos", bytes},
+                        {"motivo", textoMotivo(cliente.motivo)}
+                    };
+                    (void)EventLog::log_event_system(EventLevel::WARN, "Mensaje rechazado", contexto);
+                } catch (...) {
+                    // El registro nunca puede tumbar el hilo de red.
+                }
+            };
             // RF-28: la ventana de 60 s solo amortigua el ruido previo al
             // protocolo (sin bytes recibidos). Toda solicitud que empezó a
             // recibirse se documenta siempre con su desenlace.
             auto registrar = [](const Cliente& cliente) {
                 try {
+                    // RNF-14: el rechazo de protocolo ya quedó documentado como
+                    // "Mensaje rechazado"; no se duplica aquí.
+                    if (cliente.detalle.formatoInvalido) return;
                     if (cliente.motivo == Motivo::CierreNormal) return;
                     const auto bytes = cliente.entrada.size();
                     if (!cliente.detalle.procesada && bytes == 0) {
@@ -249,14 +292,22 @@ int iniciarServidorRed() {
                             if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
                                 (fin != std::string::npos && fin > MAX_MENSAJE_RED)) {
                                 cliente.detalle.procesada = true;
+                                cliente.detalle.formatoInvalido = true;
                                 cliente.detalle.error = "MESSAGE_TOO_LARGE";
+                                registrarRechazo(cliente,
+                                    static_cast<unsigned>(cliente.entrada.size()));
                                 responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
                             } else if (fin != std::string::npos) {
+                                // Un mensaje por conexión: los bytes posteriores
+                                // al primer '\n' se descartan con la conexión.
                                 DetalleSolicitud detalle;
                                 auto respuesta = procesarSolicitudRedDetallada(
                                     cliente.entrada.substr(0, fin), cliente.identidad,
                                     cliente.permisos, detalle);
                                 cliente.detalle = std::move(detalle);
+                                if (cliente.detalle.formatoInvalido)
+                                    registrarRechazo(cliente,
+                                        static_cast<unsigned>(cliente.entrada.size()));
                                 responder(cliente, std::move(respuesta));
                             }
                         } else if (leidos == 0) {
