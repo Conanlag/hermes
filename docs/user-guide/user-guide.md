@@ -424,6 +424,9 @@ De esta manera se puede crear, consultar y cancelar un Job utilizando las funcio
 
 # 9. Hermes Red: PC A y PC B con WSL
 
+Para usar `equipo-a` en lugar de una IP en `red job`, `red filter` y
+`red cancel`, consulta [Usar un nombre en lugar de la IP](red-nombres-host.md).
+
 PC A puede recibir trabajos de PC B y ejecutarlos con su scheduler local,
 conservando la semántica de `job`, `filter` y `cancel`. El cliente no necesita
 certificados ni iniciar su propio servidor de red.

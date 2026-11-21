@@ -10,6 +10,9 @@ No requiere editar JSON ni preparar certificados. PC B conserva los comandos
 `hermes red job <host> ...`, `filter` y `cancel`; no necesita ejecutar setup
 para actuar únicamente como solicitante. El asistente no inicia el servidor.
 
+Para escribir un nombre como `equipo-a` en lugar de la IP en los comandos,
+consulta [Usar un nombre en lugar de la IP](red-nombres-host.md).
+
 ## Un solo flujo, en azul
 
 Las preguntas, ayudas y resumen aparecen en azul. Ya no se muestra un menú

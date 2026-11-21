@@ -322,6 +322,9 @@ TCP; no prueba todavía la autorización de operaciones de Hermes.
 
 ## 9. Enviar, consultar y cancelar desde PC B
 
+Puedes reemplazar la IP de los comandos por un nombre como `equipo-a` siguiendo
+la [guía de resolución de nombres con `/etc/hosts`](red-nombres-host.md).
+
 En WSL de PC B, desde `src/hermes`:
 
 ```bash
