@@ -246,7 +246,7 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
         );
     }
 
-    if (cambios.puerto) validarRango(cambios.valorPuerto, 1, 65535, "puerto");
+    if (cambios.puerto) validarRango(cambios.valorPuerto, 1024, 65535, "puerto");
     if (cambios.interfaz && !interfazValida(cambios.valorInterfaz))
         throw std::invalid_argument("interfaz debe ser una dirección IPv4 literal.");
     if (cambios.directorioDatos && !directorioDatosValido(cambios.valorDirectorioDatos))

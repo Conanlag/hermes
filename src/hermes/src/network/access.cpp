@@ -39,10 +39,9 @@ bool reglaRedValida(const std::string& regla) {
         leer(espacio, limite);
         if (contenida(red, limite)) return true;
     }
-    // Una LAN puede asignar direcciones fuera de RFC1918. Se permite su
-    // registro explícito individual, sin habilitar subredes públicas enteras.
-    return red.mascara == UINT32_MAX && red.base >= 0x01000000U &&
-           red.base < 0xe0000000U && (red.base & 0xffff0000U) != 0xa9fe0000U;
+    // RNF-26: la demostración remota no acepta direcciones públicas. Solo
+    // loopback, redes privadas RFC1918 y el rango compartido usado por VPN.
+    return false;
 }
 
 bool origenRedPermitido(const std::string& origen, const std::vector<std::string>& reglas) {

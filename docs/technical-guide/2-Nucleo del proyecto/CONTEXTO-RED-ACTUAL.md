@@ -13,7 +13,7 @@
 > Ese merge **no cambió el protocolo de red**: `protocol.cpp`, `client.cpp`, `job.cpp`, `cancel.cpp`,
 > `storage.cpp` y `scheduler.cpp` quedaron intactos. Lo que cambió es el comando `red` (nuevo
 > subcomando `setup`), el esquema de `network.json` (campos nuevos) y la política de direcciones
-> admitidas (/32 unicast fuera de RFC1918).
+> admitidas (solo redes privadas, VPN y loopback).
 >
 > Alcance de la auditoría: solo lectura sobre `src/` y `verif/`. El único archivo modificado es este
 > documento.
@@ -560,7 +560,8 @@ dirección **individual** (`/32`, con o sin prefijo explícito) cuando cumple
 Esto habilita autorizar una IP de LAN no privada, por ejemplo `200.39.175.140` o
 `200.39.175.140/32`, sin abrir `200.39.175.0/24`. Se aplica tanto a `config.redes_permitidas`
 como a `network.json` `clientes[].direcciones`. No es una decisión neutral de seguridad: amplía la
-superficie autorizable a cualquier host público concreto y por eso RNF-13 se actualizó (§6.9).
+superficie autorizable a cualquier host público concreto. RNF-26 y RNF-13 fueron alineados
+para rechazar esas excepciones y mantener solo redes privadas, VPN y loopback.
 
 `leer()` normaliza los bits de host en subredes (`192.168.1.25/24 → 192.168.1.0/24`), admite IP sin
 prefijo como `/32` y rechaza prefijos fuera de `[0, 32]`, IPv6, hostnames y `'\0'`. `contenida()`
@@ -597,10 +598,8 @@ Propiedades y no-propiedades:
   (NAT) hereda los permisos del registro (`RF-18:88-92`).
 - `0.0.0.0` como `interfaz` escucha en todas las IPv4, pero no amplía `redes_permitidas`
   (`RF-20:34-35`).
-- El cliente solo conecta a destinos que pasen `reglaRedValida()` (`client.cpp:139`). Tras el merge,
-  esa función también admite una IPv4 unicast individual fuera de RFC1918 (§4.3), así que el cliente
-  puede usar Hermes Red contra una IP pública **concreta** autorizada, pero nunca contra una subred
-  pública completa. Es una restricción del cliente, no del servidor.
+- El cliente solo conecta a destinos que pasen `reglaRedValida()` (`client.cpp:139`). RNF-26 restringe
+  esa función a loopback, RFC1918 y `100.64.0.0/10`; una dirección pública no se usa para la demostración.
 - WSL/Windows: el `portproxy` sustituye la conexión, así que el origen observado es el gateway de
   WSL o la IP del host Windows, no la IP LAN del cliente. Las reglas deben autorizar **ese** origen
   observado (`RF-18`; `docs/user-guide/red-wsl-pc-a-pc-b.md`). Varios equipos detrás de ese proxy
@@ -808,7 +807,7 @@ La documentación detallada se conserva en [RF-21: protocolo delimitado y manejo
 | Lista vacía deniega todo | Cumple | `access.cpp:54-59` (bucle sin reglas → `false`) |
 | Lista inválida → falla antes de abrir el puerto | Cumple | `config.cpp:107-126`; `server.cpp:73-74` |
 | Una regla inválida invalida toda la lista | Cumple | `access.cpp:52-53` |
-| IP pública individual explícita (`/32`) | Cumple (nuevo): la clase de dirección ya no bloquea un host concreto; sigue rechazando subredes públicas | `access.cpp:42-45`; RF-20, sección "IP individual fuera de los rangos privados" |
+| IP pública individual explícita (`/32`) | Rechazada por RNF-26 | `access.cpp:33-48`; RNF-26 |
 | Pruebas | **Brecha**: RF-20 sigue declarando que no hay TC de red | `RF-20`; ver §6.10 |
 
 ### 6.7 RNF-08
@@ -850,7 +849,7 @@ servidor procese trabajos con su scheduler local, por lo que RNF-12 quedó obsol
 | Requisito | Estado | Evidencia |
 | --- | --- | --- |
 | Subredes contenidas en loopback/RFC1918/`100.64.0.0/10` | Cumple | `access.cpp:36-41` |
-| IP unicast individual explícita fuera de esos espacios (`/32`) | Cumple por decisión documentada en RNF-13; antes se rechazaba | `access.cpp:42-45`; RNF-13, "Espacios admitidos" |
+| IP unicast pública explícita fuera de esos espacios (`/32`) | Rechazada por RNF-26 | `access.cpp:33-48`; RNF-26 |
 | Normalización de bits de host en subredes | Cumple (`access.cpp:22-23`) |
 | Rechazo de DNS, IPv6, prefijos fuera de rango, `0.0.0.0/0` | Cumple (`access.cpp:8-25`) |
 | Rechazo de `0.0.0.0/8`, `224/4` y superiores, `169.254.0.0/16` | Cumple (`access.cpp:44-45`) |
@@ -952,7 +951,7 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
 | D18 | `servidor`, `equipos` y `clientes[].tipo` se escriben pero nunca se validan ni se usan al arrancar | Deriva silenciosa: `servidor.interfaz` puede no coincidir con `config.interfaz`, `equipos[].acceso` puede apuntar a un registro inexistente | `remote.cpp:94-139`; `setup.cpp:369-392` |
 | D19 | El enlace `src/hermes/network` está versionado con el destino absoluto de otra máquina (`/home/leo/...`) y solo se repara con `argc == 1` | Clones nuevos ven un enlace roto hasta ejecutar `./hermes` sin argumentos; si hay un directorio real, el arranque falla | `src/hermes/network`; `data_paths.h:134-148`; `main.cpp:35` |
 | D20 | `red setup` solo se enruta con `argc == 3`; `red setup <algo>` cae al cliente y aborta con un error de uso; además exige `reglasRedValidas` y un `network.json` legible | Diagnóstico confuso para el operador y dependencia implícita del arranque previo | `main.cpp:57`; `setup.cpp:259-265` |
-| D21 | La excepción /32 amplía la superficie autorizable a cualquier host público concreto y el cliente ahora también conecta a él | Cambio de postura de seguridad que depende solo de la disciplina del operador; RNF-13 quedó relajado | `access.cpp:42-45`; `client.cpp:139` |
+| D21 | ~~La excepción /32 amplía la superficie autorizable a cualquier host público concreto y el cliente también conecta a él~~ **Corregido por RNF-26** | Se elimina la excepción pública; solo se aceptan loopback, RFC1918 y `100.64.0.0/10` | `access.cpp:33-48`; `client.cpp:139`; RNF-26 |
 
 ### 6.12 Casos borde no cubiertos por el diseño actual
 

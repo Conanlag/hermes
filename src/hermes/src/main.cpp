@@ -20,6 +20,7 @@
 
 #include <thread>
 #include <chrono>
+#include <unistd.h>
 
 
 using namespace std;
@@ -28,6 +29,10 @@ using namespace std::chrono;
 
 
 int main(int argc, char* argv[]) {
+    if (geteuid() == 0) {
+        error("Hermes no debe ejecutarse como root; use un usuario sin privilegios");
+        return 1;
+    }
     try {
         hermes::inicializarConfiguracion();
         hermes::inicializarConfiguracionRemota();

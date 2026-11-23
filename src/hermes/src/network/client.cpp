@@ -122,7 +122,7 @@ int ejecutarClienteRed(int argc, char* argv[]) {
         } else throw std::invalid_argument(uso);
         auto enviar = [&]() -> json {
             // RNF-14: el límite de petición se aplica al payload sin el '\n'.
-            const auto carga = json({{"version", 1}, {"request_id", id},
+            const auto carga = json({{"version", VERSION_PROTOCOLO}, {"request_id", id},
                 {"operation", remota}, {"params", params}}).dump();
             if (carga.size() > MAX_MENSAJE_RED)
                 throw std::invalid_argument("Solicitud demasiado grande: excede el máximo de la red");
@@ -195,7 +195,7 @@ int ejecutarClienteRed(int argc, char* argv[]) {
             };
             if (!recibida.is_object()) throw invalida("el sobre no es un objeto");
             if (!recibida.contains("version") || !recibida["version"].is_number_integer() ||
-                recibida["version"] != 1)
+                recibida["version"] != static_cast<int>(VERSION_PROTOCOLO))
                 throw invalida("version ausente o distinta de 1");
             if (!recibida.contains("request_id")) throw invalida("falta request_id");
             // Un request_id nulo solo lo emite errorProtocolo(): identifica un

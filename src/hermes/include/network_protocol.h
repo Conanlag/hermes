@@ -2,6 +2,7 @@
 #include <string>
 #include "network_remote.h"
 namespace hermes {
+constexpr unsigned VERSION_PROTOCOLO = 1;
 constexpr unsigned MAX_MENSAJE_RED = 16384;        // payload máximo de petición
 constexpr unsigned MAX_RESPUESTA_RED = 262144;     // payload máximo de respuesta
 constexpr int MAX_PROFUNDIDAD_JSON = 32;           // anidamiento máximo aceptado
