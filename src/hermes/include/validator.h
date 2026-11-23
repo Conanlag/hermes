@@ -36,4 +36,10 @@ ResultadoValidacion validarTrabajosMaximosTexto(const string& texto);
 
 ResultadoValidacion validarMaxColaTexto(const string& texto);
 
+// RNF-14: verificación estricta de UTF-8 y de bytes de control en textos que
+// llegan por la red. No registra eventos: el llamador decide cómo reportarlo.
+bool utf8Valido(const string& texto);
+
+ResultadoValidacion validarTextoRed(const string& valor);
+
 #endif

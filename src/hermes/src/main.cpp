@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
         (void)hermes::rutaDatos("jobs.json");
         if (argc == 1) hermes::actualizarEnlacesDesarrollo();
     } catch (const std::exception& e) {
-        error("No se pudo inicializar la configuración: ", e.what());
+        error("No se pudo inicializar la configuración: ", hermes::detalleSeguro(e));
         return 1;
     }
 
@@ -161,7 +161,7 @@ int main(int argc, char* argv[]) {
         try {
             hermes::actualizarConfiguracion(cambios);
         } catch (const exception& e) {
-            error("No se pudo actualizar la configuración: ", e.what());
+            error("No se pudo actualizar la configuración: ", hermes::detalleSeguro(e));
             return 1;
         }
 
@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
         config = hermes::cargarConfiguracion();
         iniciarSchedulerSiNecesario(config.trabajosMaximos);
     } catch (const exception& e) {
-        error("No se pudo iniciar el scheduler: ", e.what());
+        error("No se pudo iniciar el scheduler: ", hermes::detalleSeguro(e));
         return 1;
     }
 
@@ -252,7 +252,7 @@ int main(int argc, char* argv[]) {
                 config.maxCola
             );
         } catch (const exception& e) {
-            error("No se pudo crear el Job: ", e.what());
+            error("No se pudo crear el Job: ", hermes::detalleSeguro(e));
             return 1;
         }
 

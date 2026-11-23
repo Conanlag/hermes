@@ -56,7 +56,7 @@ ResultadoCancelacion cancelarJobDetallado(unsigned int jobId, const string& prop
         return {
             false,
             CodigoCancelacion::ERROR_LECTURA,
-            e.what()
+            hermes::detalleSeguro(e)
         };
     }
 

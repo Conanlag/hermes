@@ -118,7 +118,7 @@ ResultadoValidacion validarRequestId(const string& requestId) {
     if (requestId.empty() || requestId.size() > 128) {
         hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
             {"comando_intentado", "job"},
-            {"request_id_intentado", requestId},
+            {"longitud_intentada", requestId.size()},
             {"motivo_del_rechazo", "Tamaño o formato inválido de request-id"}
         });
         return {
@@ -141,14 +141,14 @@ ResultadoValidacion validarRequestId(const string& requestId) {
         if (!valido) {
             hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
                 {"comando_intentado", "job"},
-                {"request_id_intentado", requestId},
+                {"longitud_intentada", requestId.size()},
                 {"motivo_del_rechazo", "Caracteres inválidos en request-id"}
             });
             return {
                 false,
                 CodigoValidacion::MALFORMADO,
                 "El identificador de solicitud solo admite letras, "
-                "numeros, punto, guion y guion bajo."
+                "numeros, punto, guion, dos puntos y guion bajo."
             };
         }
     }
@@ -493,4 +493,79 @@ ResultadoValidacion validarMaxColaTexto(
             to_string(hermes::MAX_MAX_COLA) + ").",
         "de --cola "
     );
+}
+
+bool utf8Valido(const string& texto) {
+    size_t indice = 0;
+    const size_t total = texto.size();
+
+    while (indice < total) {
+        const auto byte = static_cast<unsigned char>(texto[indice]);
+
+        // ASCII: un único byte bien formado.
+        if (byte <= 0x7F) {
+            ++indice;
+            continue;
+        }
+
+        size_t continuaciones = 0;
+        unsigned char primerMinimo = 0x80;
+        unsigned char primerMaximo = 0xBF;
+
+        if (byte >= 0xC2 && byte <= 0xDF) {
+            continuaciones = 1;
+        } else if (byte >= 0xE0 && byte <= 0xEF) {
+            continuaciones = 2;
+            if (byte == 0xE0) primerMinimo = 0xA0;  // evita sobrecarga
+            if (byte == 0xED) primerMaximo = 0x9F;  // evita surrogates
+        } else if (byte >= 0xF0 && byte <= 0xF4) {
+            continuaciones = 3;
+            if (byte == 0xF0) primerMinimo = 0x90;  // evita sobrecarga
+            if (byte == 0xF4) primerMaximo = 0x8F;  // tope de U+10FFFF
+        } else {
+            // Continuación aislada, 0xC0/0xC1 y 0xF5-0xFF nunca son válidos.
+            return false;
+        }
+
+        if (indice + continuaciones >= total) return false;
+
+        for (size_t i = 1; i <= continuaciones; ++i) {
+            const auto actual = static_cast<unsigned char>(texto[indice + i]);
+            const unsigned char minimo = (i == 1) ? primerMinimo : 0x80;
+            const unsigned char maximo = (i == 1) ? primerMaximo : 0xBF;
+            if (actual < minimo || actual > maximo) return false;
+        }
+
+        indice += continuaciones + 1;
+    }
+
+    return true;
+}
+
+ResultadoValidacion validarTextoRed(const string& valor) {
+    for (unsigned char byte : valor) {
+        // NUL y controles C0, incluidos tabulador, salto de línea y retorno
+        // de carro, más DEL: ninguno tiene uso legítimo en un texto de red.
+        if (byte < 0x20 || byte == 0x7F) {
+            return {
+                false,
+                CodigoValidacion::MALFORMADO,
+                "El texto contiene caracteres de control no permitidos."
+            };
+        }
+    }
+
+    if (!utf8Valido(valor)) {
+        return {
+            false,
+            CodigoValidacion::MALFORMADO,
+            "El texto contiene una secuencia UTF-8 inválida."
+        };
+    }
+
+    return {
+        true,
+        CodigoValidacion::OK,
+        ""
+    };
 }

@@ -48,13 +48,13 @@ ConfiguracionSistema cargarConfiguracion() {
 
     try {
         archivo >> datos;
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         EventLog::log_event_system(
             EventLevel::WARN,
             "Error al parsear config.json; se utiliza la configuración por defecto",
             {
                 {"archivo", ruta},
-                {"detalle", e.what()},
+                {"detalle", "JSON mal formado"},
                 {"trabajos_maximos", config.trabajosMaximos}
             }
         );

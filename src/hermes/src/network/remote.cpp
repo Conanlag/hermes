@@ -5,6 +5,7 @@
 #include "job.h"
 #include "job_presentation.h"
 #include "cancel.h"
+#include "event_log.h"
 #include "validator.h"
 #include "storage.h"
 #include "timestamp.h"
@@ -90,7 +91,12 @@ ConfiguracionRemota cargarConfiguracionRemota() {
     std::ifstream archivo(ruta);
     if (!archivo) throw std::runtime_error("No se pudo leer network/network.json");
     json datos;
-    archivo >> datos;
+    try {
+        archivo >> datos;
+    } catch (const std::exception&) {
+        // RNF-15: el texto del parser puede contener fragmentos del archivo.
+        throw std::runtime_error("network.json no es un JSON válido");
+    }
     return interpretarConfiguracionRemota(datos);
 }
 
@@ -147,20 +153,22 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
                 !params.contains("argumentos") || !params["argumentos"].is_array())
                 return error("INVALID_PARAMS");
             const auto programa = params["programa"].get<std::string>();
-            if (!validarPrograma(programa).esValido || programa.find('\0') != std::string::npos ||
+            if (!validarPrograma(programa).esValido || !validarTextoRed(programa).esValido ||
                 !contiene(permisos.programas, programa))
                 return error("PROGRAM_NOT_ALLOWED");
             std::vector<std::string> argumentos;
             for (const auto& argumento : params["argumentos"]) {
                 if (!argumento.is_string()) return error("INVALID_PARAMS");
                 const auto valor = argumento.get<std::string>();
-                if (valor.find('\0') != std::string::npos) return error("INVALID_PARAMS");
+                if (!validarTextoRed(valor).esValido) return error("INVALID_PARAMS");
                 argumentos.push_back(valor);
             }
             const auto config = cargarConfiguracion();
             auto job = crearJob(programa, argumentos, "red-" + identidad + "-" + requestId,
                                      config.trabajosMaximos, config.maxCola, identidad);
-            esperarInicioJob(job);
+            // Sin espera al scheduler: el hilo de poll() no puede bloquearse hasta
+            // 1 s por submit (head-of-line blocking). El Job ya está persistido y
+            // el cliente tolera pid 0 ("PID: pendiente (en cola)").
             return exito({{"job_id", job.job_id}, {"duplicated", job.solicitudDuplicada}, {"job", jsonDesdeJob(job)}});
         }
         if (operacion == "list") {
@@ -175,6 +183,8 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
                     !params.contains("valor") || !params["valor"].is_string()) return error("INVALID_PARAMS");
                 tipo = params["tipo"].get<std::string>();
                 valor = params["valor"].get<std::string>();
+                if (!validarTextoRed(tipo).esValido || !validarTextoRed(valor).esValido)
+                    return error("INVALID_PARAMS");
                 if ((tipo != "status" && tipo != "programa") ||
                     (tipo == "status" && !validarStatusTexto(valor).esValido) ||
                     (tipo == "programa" && !validarPrograma(valor).esValido)) return error("INVALID_PARAMS");
@@ -210,8 +220,13 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
         }
         return error("UNKNOWN_OPERATION");
     } catch (const std::exception& detalle) {
+        // RNF-15: el detalle interno no viaja al cliente; solo un mensaje
+        // controlado. La causa clasificada queda en la bitácora.
+        EventLog::log_event_system(EventLevel::ERROR,
+            "Error interno al procesar solicitud remota",
+            {{"detalle", detalleSeguro(detalle)}});
         auto respuesta = error("JOB_OPERATION_FAILED");
-        respuesta["message"] = detalle.what();
+        respuesta["message"] = "Error interno al procesar la solicitud";
         return respuesta;
     }
 }

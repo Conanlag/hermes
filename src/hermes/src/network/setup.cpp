@@ -3,6 +3,7 @@
 #include "network_access.h"
 #include "data_paths.h"
 #include "config.h"
+#include "event_log.h"
 #include "validator.h"
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -440,7 +441,7 @@ int configurarRedInteractiva() {
                   << "El cliente debe usar ese mismo puerto. No se ha comprobado aún la conexión desde el otro equipo.\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "Setup: " << error.what() << '\n';
+        std::cerr << "Setup: " << detalleSeguro(error) << '\n';
         if (configGuardada) std::cerr << "Ya se guardó config.json; revise network.json y los respaldos. Windows podría seguir pendiente.\n";
         return 1;
     }

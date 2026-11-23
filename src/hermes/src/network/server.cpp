@@ -3,6 +3,8 @@
 #include "network_access.h"
 #include "network_protocol.h"
 #include "scheduler.h"
+#include "event_log.h"
+#include <array>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -64,6 +66,78 @@ private:
 void fallo(const char* operacion) {
     throw std::runtime_error(std::string(operacion) + ": " + std::strerror(errno));
 }
+
+using Reloj = std::chrono::steady_clock;
+
+// Motivo de cierre de un cliente. Solo los motivos anómalos llegan a la
+// bitácora: el cierre normal tras entregar la respuesta no se registra.
+enum class Motivo : std::size_t {
+    CierreNormal = 0,
+    FinSinMensaje,
+    TimeoutLectura,
+    TimeoutEscritura,
+    ErrorLectura,
+    ErrorEscritura,
+    ErrorSocket,
+    ErrorInterno,
+    OrigenRechazado,
+    CupoExcedido,
+    Total
+};
+
+constexpr std::size_t TOTAL_MOTIVOS = static_cast<std::size_t>(Motivo::Total);
+
+const char* textoMotivo(Motivo motivo) {
+    switch (motivo) {
+        case Motivo::FinSinMensaje: return "FIN_SIN_MENSAJE";
+        case Motivo::TimeoutLectura: return "TIMEOUT_LECTURA";
+        case Motivo::TimeoutEscritura: return "TIMEOUT_ESCRITURA";
+        case Motivo::ErrorLectura: return "ERROR_LECTURA";
+        case Motivo::ErrorEscritura: return "ERROR_ESCRITURA";
+        case Motivo::ErrorSocket: return "ERROR_SOCKET";
+        case Motivo::ErrorInterno: return "ERROR_INTERNO";
+        case Motivo::OrigenRechazado: return "ORIGEN_RECHAZADO";
+        case Motivo::CupoExcedido: return "CUPO_EXCEDIDO";
+        default: return "CIERRE_NORMAL";
+    }
+}
+
+// Un aviso por motivo cada 60 s: EventLog hace open+flock+write+fsync+close
+// por evento y el hilo de red no puede pagar ese coste por conexión rechazada.
+bool avisoPermitido(Motivo motivo) {
+    static std::array<Reloj::time_point, TOTAL_MOTIVOS> ultimo{};
+    static std::array<bool, TOTAL_MOTIVOS> usado{};
+    if (motivo == Motivo::CierreNormal) return false;
+    const auto indice = static_cast<std::size_t>(motivo);
+    const auto ahora = Reloj::now();
+    if (usado[indice] && ahora - ultimo[indice] < std::chrono::seconds(60)) return false;
+    usado[indice] = true;
+    ultimo[indice] = ahora;
+    return true;
+}
+
+// RNF-14: ventana de 60 s por código de rechazo. El primer rechazo de cada
+// código siempre se registra, de modo que el diagnóstico real no se pierde.
+// Un código ausente de la tabla se registra siempre: lo genera el servidor y
+// no procede del cliente, así que no puede usarse para saturar la bitácora.
+bool rechazoPermitido(const std::string& codigo) {
+    static constexpr std::array<const char*, 12> CODIGOS{{
+        "MESSAGE_TOO_LARGE", "NUL_BYTE", "INVALID_UTF8", "TOO_DEEP", "INVALID_JSON",
+        "INVALID_REQUEST", "INVALID_REQUEST_ID", "INVALID_VERSION", "UNSUPPORTED_VERSION",
+        "INVALID_OPERATION", "INVALID_PARAMS", "UNKNOWN_OPERATION"
+    }};
+    static std::array<Reloj::time_point, CODIGOS.size()> ultimo{};
+    static std::array<bool, CODIGOS.size()> usado{};
+    for (std::size_t indice = 0; indice < CODIGOS.size(); ++indice) {
+        if (codigo != CODIGOS[indice]) continue;
+        const auto ahora = Reloj::now();
+        if (usado[indice] && ahora - ultimo[indice] < std::chrono::seconds(60)) return false;
+        usado[indice] = true;
+        ultimo[indice] = ahora;
+        return true;
+    }
+    return true;
+}
 }
 
 namespace hermes {
@@ -96,17 +170,20 @@ int iniciarServidorRed() {
         Senales senales;
         std::cout << "Hermes Red escuchando en " << config.interfaz << ':' << config.puerto
                   << " (primer plano; Ctrl+C para detener)" << std::endl;
-        using Reloj = std::chrono::steady_clock;
         struct Cliente {
             explicit Cliente(int fd) : socket(fd), limite(Reloj::now() + std::chrono::seconds(3)) {}
             Descriptor socket;
             short esperado = POLLIN;
             std::string identidad;
+            std::string ip;
             const PermisosRemotos* permisos = nullptr;
             std::string entrada, salida;
             std::size_t enviado = 0;
             Reloj::time_point limite;
             bool cerrado = false;
+            Motivo motivo = Motivo::CierreNormal;
+            // RF-28: desenlace de la solicitud atendida en esta conexión.
+            DetalleSolicitud detalle;
         };
         std::vector<std::unique_ptr<Cliente>> clientes;
         while (!detener) {
@@ -123,44 +200,169 @@ int iniciarServidorRed() {
                 throw std::runtime_error("Error en el socket de escucha");
             auto responder = [](Cliente& cliente, std::string respuesta) {
                 cliente.salida = std::move(respuesta);
+                cliente.enviado = 0;
                 cliente.esperado = POLLOUT;
                 cliente.limite = Reloj::now() + std::chrono::seconds(3);
+            };
+            // Error de cortesía: un solo intento de escritura y cierre inmediato.
+            // Retener el descriptor esperando POLLOUT de un par desconectado agota
+            // el cupo sin beneficio: el cliente oficial no interpreta
+            // request_id: null (protocol.cpp:9 vs client.cpp:178).
+            auto despedida = [](Cliente& cliente, const char* codigo, Motivo motivo) {
+                cliente.salida = errorProtocolo(codigo);
+                cliente.enviado = 0;
+                if (!cliente.salida.empty())
+                    (void)send(cliente.socket.valor, cliente.salida.data(),
+                               cliente.salida.size(), MSG_NOSIGNAL);
+                cliente.motivo = motivo;
+                cliente.cerrado = true;
+            };
+            // RNF-14: documenta el rechazo de protocolo en el momento en que se
+            // produce, no al cerrar la conexión.
+            auto registrarRechazo = [](const Cliente& cliente, unsigned bytes) noexcept {
+                try {
+                    if (!rechazoPermitido(cliente.detalle.error)) return;
+                    nlohmann::json contexto{
+                        {"ip", cliente.ip},
+                        {"identidad", cliente.identidad},
+                        {"codigo", cliente.detalle.error},
+                        {"bytes_recibidos", bytes},
+                        {"motivo", textoMotivo(cliente.motivo)}
+                    };
+                    (void)EventLog::log_event_system(EventLevel::WARN, "Mensaje rechazado", contexto);
+                } catch (...) {
+                    // El registro nunca puede tumbar el hilo de red.
+                }
+            };
+            // RF-28: la ventana de 60 s solo amortigua el ruido previo al
+            // protocolo (sin bytes recibidos). Toda solicitud que empezó a
+            // recibirse se documenta siempre con su desenlace.
+            auto registrar = [](const Cliente& cliente) {
+                try {
+                    // RNF-14: el rechazo de protocolo ya quedó documentado como
+                    // "Mensaje rechazado"; no se duplica aquí.
+                    if (cliente.detalle.formatoInvalido) return;
+                    if (cliente.motivo == Motivo::CierreNormal) return;
+                    const auto bytes = cliente.entrada.size();
+                    if (!cliente.detalle.procesada && bytes == 0) {
+                        if (!avisoPermitido(cliente.motivo)) return;
+                        (void)EventLog::log_event_system(EventLevel::WARN, "Cliente desconectado", {
+                            {"ip", cliente.ip},
+                            {"motivo", textoMotivo(cliente.motivo)},
+                            {"bytes_recibidos", bytes}
+                        });
+                        return;
+                    }
+                    nlohmann::json contexto{
+                        {"ip", cliente.ip},
+                        {"motivo", textoMotivo(cliente.motivo)},
+                        {"resultado", !cliente.detalle.procesada
+                            ? "SIN_EFECTO"
+                            : (cliente.detalle.aceptada ? "ACEPTADA" : "RECHAZADA")},
+                        {"bytes_recibidos", bytes}
+                    };
+                    if (!cliente.detalle.operacion.empty()) contexto["operacion"] = cliente.detalle.operacion;
+                    if (!cliente.detalle.requestId.empty()) contexto["request_id"] = cliente.detalle.requestId;
+                    if (!cliente.identidad.empty()) contexto["identidad"] = cliente.identidad;
+                    if (cliente.detalle.jobId != 0) contexto["job_id"] = cliente.detalle.jobId;
+                    if (!cliente.detalle.error.empty()) contexto["error"] = cliente.detalle.error;
+                    (void)EventLog::log_event_system(EventLevel::WARN, "Solicitud interrumpida", contexto);
+                } catch (...) {
+                    // El registro nunca puede tumbar el hilo de red.
+                }
             };
             for (std::size_t i = 0; i < clientes.size(); ++i) {
                 auto& cliente = *clientes[i];
                 const auto evento = eventos[i + 1].revents;
-                if (evento & (POLLERR | POLLNVAL)) { cliente.cerrado = true; continue; }
-                if (cliente.salida.empty() && (evento & (cliente.esperado | POLLHUP))) {
-                    char buffer[4096];
-                    const auto leidos = recv(cliente.socket.valor, buffer, sizeof(buffer), 0);
-                    if (leidos > 0) {
-                        cliente.entrada.append(buffer, static_cast<std::size_t>(leidos));
-                        const auto fin = cliente.entrada.find('\n');
-                        if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
-                            (fin != std::string::npos && fin > MAX_MENSAJE_RED))
-                            responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
-                        else if (fin != std::string::npos)
-                            responder(cliente, procesarSolicitudRed(cliente.entrada.substr(0, fin), cliente.identidad, cliente.permisos));
-                    } else if (leidos == 0) {
-                        responder(cliente, errorProtocolo("INCOMPLETE_MESSAGE"));
-                    } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)
+                // Un fallo al atender a un cliente nunca puede terminar el
+                // servicio: se cierra ese cliente y se sigue con el resto.
+                try {
+                    const bool errorTerminal = (evento & (POLLERR | POLLNVAL)) != 0;
+                    const bool colgado = (evento & POLLHUP) != 0;
+                    // RF-28: los bytes que llegaron antes del corte se atienden
+                    // primero. Clasificar el cierre antes de leer perdía el
+                    // desenlace de solicitudes ya completas (RST tras enviar).
+                    if (cliente.salida.empty() &&
+                        (evento & (cliente.esperado | POLLHUP | POLLERR))) {
+                        char buffer[4096];
+                        const auto leidos = recv(cliente.socket.valor, buffer, sizeof(buffer), 0);
+                        if (leidos > 0) {
+                            cliente.entrada.append(buffer, static_cast<std::size_t>(leidos));
+                            const auto fin = cliente.entrada.find('\n');
+                            if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
+                                (fin != std::string::npos && fin > MAX_MENSAJE_RED)) {
+                                cliente.detalle.procesada = true;
+                                cliente.detalle.formatoInvalido = true;
+                                cliente.detalle.error = "MESSAGE_TOO_LARGE";
+                                registrarRechazo(cliente,
+                                    static_cast<unsigned>(cliente.entrada.size()));
+                                responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
+                            } else if (fin != std::string::npos) {
+                                // Un mensaje por conexión: los bytes posteriores
+                                // al primer '\n' se descartan con la conexión.
+                                DetalleSolicitud detalle;
+                                auto respuesta = procesarSolicitudRedDetallada(
+                                    cliente.entrada.substr(0, fin), cliente.identidad,
+                                    cliente.permisos, detalle);
+                                cliente.detalle = std::move(detalle);
+                                if (cliente.detalle.formatoInvalido)
+                                    registrarRechazo(cliente,
+                                        static_cast<unsigned>(cliente.entrada.size()));
+                                responder(cliente, std::move(respuesta));
+                            }
+                        } else if (leidos == 0) {
+                            despedida(cliente, "INCOMPLETE_MESSAGE", Motivo::FinSinMensaje);
+                        } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+                            cliente.motivo = errorTerminal ? Motivo::ErrorSocket : Motivo::ErrorLectura;
+                            cliente.cerrado = true;
+                        }
+                    }
+                    if (!cliente.cerrado && errorTerminal) {
+                        cliente.motivo = Motivo::ErrorSocket;
                         cliente.cerrado = true;
-                }
-                if (!cliente.salida.empty() && (evento & cliente.esperado)) {
-                    const auto enviados = send(cliente.socket.valor,
-                        cliente.salida.data() + cliente.enviado,
-                        cliente.salida.size() - cliente.enviado, MSG_NOSIGNAL);
-                    if (enviados > 0) {
-                        cliente.enviado += static_cast<std::size_t>(enviados);
-                        if (cliente.enviado == cliente.salida.size()) cliente.cerrado = true;
-                    } else if (enviados == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK))
+                        continue;
+                    }
+                    // Hang up con respuesta pendiente: ya no hay par que lea.
+                    if (!cliente.cerrado && colgado && !cliente.salida.empty()) {
+                        cliente.motivo = Motivo::ErrorEscritura;
                         cliente.cerrado = true;
-                }
-                if (Reloj::now() >= cliente.limite) {
-                    if (cliente.salida.empty()) responder(cliente, errorProtocolo("REQUEST_TIMEOUT"));
-                    else cliente.cerrado = true;
+                        continue;
+                    }
+                    if (!cliente.cerrado && !cliente.salida.empty() && (evento & cliente.esperado)) {
+                        const auto enviados = send(cliente.socket.valor,
+                            cliente.salida.data() + cliente.enviado,
+                            cliente.salida.size() - cliente.enviado, MSG_NOSIGNAL);
+                        if (enviados > 0) {
+                            cliente.enviado += static_cast<std::size_t>(enviados);
+                            if (cliente.enviado == cliente.salida.size()) cliente.cerrado = true;
+                        } else if (enviados == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                            cliente.motivo = Motivo::ErrorEscritura;
+                            cliente.cerrado = true;
+                        }
+                    }
+                    if (!cliente.cerrado && Reloj::now() >= cliente.limite) {
+                        if (cliente.salida.empty())
+                            despedida(cliente, "REQUEST_TIMEOUT", Motivo::TimeoutLectura);
+                        else {
+                            cliente.motivo = Motivo::TimeoutEscritura;
+                            cliente.cerrado = true;
+                        }
+                    }
+                } catch (const std::exception& error) {
+                    EventLog::log_event_system(EventLevel::ERROR, "Error interno al procesar cliente", {
+                        {"ip", cliente.ip}, {"detalle", detalleSeguro(error)}
+                    });
+                    cliente.motivo = Motivo::ErrorInterno;
+                    cliente.cerrado = true;
+                } catch (...) {
+                    EventLog::log_event_system(EventLevel::ERROR, "Error interno al procesar cliente", {
+                        {"ip", cliente.ip}
+                    });
+                    cliente.motivo = Motivo::ErrorInterno;
+                    cliente.cerrado = true;
                 }
             }
+            for (const auto& cliente : clientes) registrar(*cliente);
             clientes.erase(std::remove_if(clientes.begin(), clientes.end(),
                 [](const auto& cliente) { return cliente->cerrado; }), clientes.end());
             if (eventos[0].revents & POLLIN) {
@@ -174,11 +376,25 @@ int iniciarServidorRed() {
                     fallo("accept");
                 }
                 char ip[INET_ADDRSTRLEN]{};
-                if (!inet_ntop(AF_INET, &origen.sin_addr, ip, sizeof(ip)) ||
-                    !origenRedPermitido(ip, config.redesPermitidas) || clientes.size() >= 32)
+                if (!inet_ntop(AF_INET, &origen.sin_addr, ip, sizeof(ip)))
                     continue;
+                if (!origenRedPermitido(ip, config.redesPermitidas)) {
+                    if (avisoPermitido(Motivo::OrigenRechazado))
+                        EventLog::log_event_system(EventLevel::WARN, "Conexión rechazada", {
+                            {"ip", ip}, {"motivo", textoMotivo(Motivo::OrigenRechazado)}
+                        });
+                    continue;
+                }
+                if (clientes.size() >= 32) {
+                    if (avisoPermitido(Motivo::CupoExcedido))
+                        EventLog::log_event_system(EventLevel::WARN, "Conexión rechazada", {
+                            {"ip", ip}, {"motivo", textoMotivo(Motivo::CupoExcedido)}
+                        });
+                    continue;
+                }
                 auto cliente = std::make_unique<Cliente>(conexion.valor);
                 conexion.valor = -1;
+                cliente->ip = ip;
                 if (remota.habilitada) {
                     const auto identidad = remota.identidades.find(ip);
                     if (identidad != remota.identidades.end()) {
@@ -192,7 +408,7 @@ int iniciarServidorRed() {
         std::cout << "Hermes Red detenido" << std::endl;
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "No se pudo iniciar o mantener Hermes Red: " << e.what() << '\n';
+        std::cerr << "No se pudo iniciar o mantener Hermes Red: " << detalleSeguro(e) << '\n';
         return 1;
     }
 }

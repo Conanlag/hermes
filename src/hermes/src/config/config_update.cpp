@@ -269,10 +269,9 @@ void actualizarConfiguracion(const CambiosConfiguracion& cambios) {
     if (archivo.is_open()) {
         try {
             archivo >> datos;
-        } catch (const std::exception& error) {
+        } catch (const std::exception&) {
             throw std::runtime_error(
-                std::string("No se pudo interpretar config.json: ") +
-                error.what()
+                "No se pudo interpretar config.json: JSON mal formado"
             );
         }
 
