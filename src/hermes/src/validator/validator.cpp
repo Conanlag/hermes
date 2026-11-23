@@ -118,7 +118,7 @@ ResultadoValidacion validarRequestId(const string& requestId) {
     if (requestId.empty() || requestId.size() > 128) {
         hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
             {"comando_intentado", "job"},
-            {"request_id_intentado", requestId},
+            {"longitud_intentada", requestId.size()},
             {"motivo_del_rechazo", "Tamaño o formato inválido de request-id"}
         });
         return {
@@ -141,7 +141,7 @@ ResultadoValidacion validarRequestId(const string& requestId) {
         if (!valido) {
             hermes::EventLog::log_event_system(hermes::EventLevel::WARN, "Rechazo de Validación", {
                 {"comando_intentado", "job"},
-                {"request_id_intentado", requestId},
+                {"longitud_intentada", requestId.size()},
                 {"motivo_del_rechazo", "Caracteres inválidos en request-id"}
             });
             return {

@@ -1338,7 +1338,7 @@ void iniciarSchedulerSiNecesario(int trabajosMaximos) {
     } catch (const exception& e) {
         hermes::EventLog::log_event_system(hermes::EventLevel::ERROR, "Error interno del daemon", {
             {"funcion", "arranque del scheduler"},
-            {"detalle", e.what()}
+            {"detalle", hermes::detalleSeguro(e)}
         });
 
         flock(descriptor, LOCK_UN);

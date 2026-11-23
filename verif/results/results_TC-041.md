@@ -154,3 +154,48 @@ PASS V1/AC1: las siete respuestas inválidas se rechazan con diagnóstico claro.
 PASS V2/AC2: ninguna excepción cruda de JSON llega al usuario.
 PASS: RNF-14 TC-041 sin fallos.
 ```
+
+## Ejecucion: 2026-11-20 19:00:02 -0600
+
+```text
+  sin_delimitador  -> Hermes Red: El servidor cerró o rechazó la conexión
+  excesiva         -> Hermes Red: Respuesta demasiado grande: excede el máximo de la red
+  nulo             -> Hermes Red: Respuesta inválida del servidor: contiene un byte nulo
+  version          -> Hermes Red: Respuesta inválida del servidor: version ausente o distinta de 1
+  sin_result       -> Hermes Red: Respuesta inválida del servidor: result ausente o no es objeto
+  sin_error        -> Hermes Red: Respuesta inválida del servidor: error ausente o vacío
+  json_roto        -> Hermes Red: Respuesta inválida del servidor: JSON mal formado
+PASS V1/AC1: las siete respuestas inválidas se rechazan con diagnóstico claro.
+PASS V2/AC2: ninguna excepción cruda de JSON llega al usuario.
+PASS: RNF-14 TC-041 sin fallos.
+```
+
+## Ejecucion: 2026-11-22 17:50:56 -0600
+
+```text
+  sin_delimitador  -> Hermes Red: El servidor cerró o rechazó la conexión
+  excesiva         -> Hermes Red: Respuesta demasiado grande: excede el máximo de la red
+  nulo             -> Hermes Red: Respuesta inválida del servidor: contiene un byte nulo
+  version          -> Hermes Red: Respuesta inválida del servidor: version ausente o distinta de 1
+  sin_result       -> Hermes Red: Respuesta inválida del servidor: result ausente o no es objeto
+  sin_error        -> Hermes Red: Respuesta inválida del servidor: error ausente o vacío
+  json_roto        -> Hermes Red: Respuesta inválida del servidor: JSON mal formado
+PASS V1/AC1: las siete respuestas inválidas se rechazan con diagnóstico claro.
+PASS V2/AC2: ninguna excepción cruda de JSON llega al usuario.
+PASS: RNF-14 TC-041 sin fallos.
+```
+
+## Ejecucion: 2026-11-22 17:58:23 -0600
+
+```text
+  sin_delimitador  -> Hermes Red: El servidor cerró o rechazó la conexión
+  excesiva         -> Hermes Red: Respuesta demasiado grande: excede el máximo de la red
+  nulo             -> Hermes Red: Respuesta inválida del servidor: contiene un byte nulo
+  version          -> Hermes Red: Respuesta inválida del servidor: version ausente o distinta de 1
+  sin_result       -> Hermes Red: Respuesta inválida del servidor: result ausente o no es objeto
+  sin_error        -> Hermes Red: Respuesta inválida del servidor: error ausente o vacío
+  json_roto        -> Hermes Red: Respuesta inválida del servidor: JSON mal formado
+PASS V1/AC1: las siete respuestas inválidas se rechazan con diagnóstico claro.
+PASS V2/AC2: ninguna excepción cruda de JSON llega al usuario.
+PASS: RNF-14 TC-041 sin fallos.
+```

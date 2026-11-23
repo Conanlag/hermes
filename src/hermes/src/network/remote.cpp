@@ -5,6 +5,7 @@
 #include "job.h"
 #include "job_presentation.h"
 #include "cancel.h"
+#include "event_log.h"
 #include "validator.h"
 #include "storage.h"
 #include "timestamp.h"
@@ -90,7 +91,12 @@ ConfiguracionRemota cargarConfiguracionRemota() {
     std::ifstream archivo(ruta);
     if (!archivo) throw std::runtime_error("No se pudo leer network/network.json");
     json datos;
-    archivo >> datos;
+    try {
+        archivo >> datos;
+    } catch (const std::exception&) {
+        // RNF-15: el texto del parser puede contener fragmentos del archivo.
+        throw std::runtime_error("network.json no es un JSON válido");
+    }
     return interpretarConfiguracionRemota(datos);
 }
 
@@ -214,8 +220,13 @@ json ejecutarOperacionRemota(const std::string& operacion, const json& params,
         }
         return error("UNKNOWN_OPERATION");
     } catch (const std::exception& detalle) {
+        // RNF-15: el detalle interno no viaja al cliente; solo un mensaje
+        // controlado. La causa clasificada queda en la bitácora.
+        EventLog::log_event_system(EventLevel::ERROR,
+            "Error interno al procesar solicitud remota",
+            {{"detalle", detalleSeguro(detalle)}});
         auto respuesta = error("JOB_OPERATION_FAILED");
-        respuesta["message"] = detalle.what();
+        respuesta["message"] = "Error interno al procesar la solicitud";
         return respuesta;
     }
 }

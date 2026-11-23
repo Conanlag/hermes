@@ -44,3 +44,27 @@ Avisos 'Cliente desconectado' tras 5 desconexiones: 1 (motivo FIN_SIN_MENSAJE: 1
 PASS V8: desconexión anómala registrada una sola vez y sin ruido en cierres normales.
 PASS: RF-22 T-12 (V8) sin fallos.
 ```
+
+## Ejecucion: 2026-11-20 18:59:49 -0600
+
+```text
+Avisos 'Cliente desconectado' tras 5 desconexiones: 1 (motivo FIN_SIN_MENSAJE: 1)
+PASS V8: desconexión anómala registrada una sola vez y sin ruido en cierres normales.
+PASS: RF-22 T-12 (V8) sin fallos.
+```
+
+## Ejecucion: 2026-11-22 17:50:44 -0600
+
+```text
+Avisos 'Cliente desconectado' tras 5 desconexiones: 1 (motivo FIN_SIN_MENSAJE: 1)
+PASS V8: desconexión anómala registrada una sola vez y sin ruido en cierres normales.
+PASS: RF-22 T-12 (V8) sin fallos.
+```
+
+## Ejecucion: 2026-11-22 17:58:10 -0600
+
+```text
+Avisos 'Cliente desconectado' tras 5 desconexiones: 1 (motivo FIN_SIN_MENSAJE: 1)
+PASS V8: desconexión anómala registrada una sola vez y sin ruido en cierres normales.
+PASS: RF-22 T-12 (V8) sin fallos.
+```

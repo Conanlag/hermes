@@ -350,7 +350,7 @@ int iniciarServidorRed() {
                     }
                 } catch (const std::exception& error) {
                     EventLog::log_event_system(EventLevel::ERROR, "Error interno al procesar cliente", {
-                        {"ip", cliente.ip}, {"detalle", error.what()}
+                        {"ip", cliente.ip}, {"detalle", detalleSeguro(error)}
                     });
                     cliente.motivo = Motivo::ErrorInterno;
                     cliente.cerrado = true;
@@ -408,7 +408,7 @@ int iniciarServidorRed() {
         std::cout << "Hermes Red detenido" << std::endl;
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "No se pudo iniciar o mantener Hermes Red: " << e.what() << '\n';
+        std::cerr << "No se pudo iniciar o mantener Hermes Red: " << detalleSeguro(e) << '\n';
         return 1;
     }
 }

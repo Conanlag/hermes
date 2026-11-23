@@ -470,7 +470,7 @@ void verificarYRestaurarJobsAlArranque() {
                 hermes::EventLevel::ERROR,
                 "Error durante la verificación/restauración de jobs.json al arranque",
                 {
-                    {"detalle", e.what()}
+                    {"detalle", hermes::detalleSeguro(e)}
                 }
             );
         } catch (...) {
