@@ -50,3 +50,42 @@ PASS V1/AC1: las asignaciones sensibles se redactan en events.jsonl.
 PASS V2/AC2: jobs.json conserva los argumentos reales del Job.
 PASS: RNF-15 TC-043 sin fallos.
 ```
+
+## Ejecucion: 2026-11-22 19:11:45 -0600
+
+```text
+== Job con asignaciones sensibles ==
+job ID: 1
+PID: 32906
+  argumentos en bitacora: ['--password=[REDACTED]', '--api-key=[REDACTED]']
+PASS V1/AC1: las asignaciones sensibles se redactan en events.jsonl.
+  argumentos persistidos: ['--password=rf15secreto1', '--api-key=rf15secreto2']
+PASS V2/AC2: jobs.json conserva los argumentos reales del Job.
+PASS: RNF-15 TC-043 sin fallos.
+```
+
+## Ejecucion: 2026-11-22 19:19:49 -0600
+
+```text
+== Job con asignaciones sensibles ==
+job ID: 1
+PID: 39173
+  argumentos en bitacora: ['--password=[REDACTED]', '--api-key=[REDACTED]']
+PASS V1/AC1: las asignaciones sensibles se redactan en events.jsonl.
+  argumentos persistidos: ['--password=rf15secreto1', '--api-key=rf15secreto2']
+PASS V2/AC2: jobs.json conserva los argumentos reales del Job.
+PASS: RNF-15 TC-043 sin fallos.
+```
+
+## Ejecucion: 2026-11-23 19:17:46 -0600
+
+```text
+== Job con asignaciones sensibles ==
+job ID: 1
+PID: 45718
+  argumentos en bitacora: ['--password=[REDACTED]', '--api-key=[REDACTED]']
+PASS V1/AC1: las asignaciones sensibles se redactan en events.jsonl.
+  argumentos persistidos: ['--password=rf15secreto1', '--api-key=rf15secreto2']
+PASS V2/AC2: jobs.json conserva los argumentos reales del Job.
+PASS: RNF-15 TC-043 sin fallos.
+```

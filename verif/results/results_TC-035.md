@@ -92,3 +92,36 @@ PASS V2/AC2: bitácora coherente con el estado aplicado.
 PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
 PASS: RF-28 TC-035 sin fallos.
 ```
+
+## Ejecucion: 2026-11-22 19:11:34 -0600
+
+```text
+Arrancando 'hermes red start' con HOME temporal...
+PASS V1: submit aceptado persistido íntegro tras el corte y en estado terminal.
+  bitácora: {"context": {"bytes_recibidos": 117, "identidad": "tcp-PC-B", "ip": "127.0.0.1", "job_id": 1, "motivo": "ERROR_ESCRITURA", "operacion": "submit", "request_id": "tc035-corte", "resultado": "ACEPTADA"}, "job_id": null, "level": "WARN", "message": "Solicitud interrumpida", "ts": "2026-11-22 19:11:34"}
+PASS V2/AC2: bitácora coherente con el estado aplicado.
+PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
+PASS: RF-28 TC-035 sin fallos.
+```
+
+## Ejecucion: 2026-11-22 19:19:37 -0600
+
+```text
+Arrancando 'hermes red start' con HOME temporal...
+PASS V1: submit aceptado persistido íntegro tras el corte y en estado terminal.
+  bitácora: {"context": {"bytes_recibidos": 117, "identidad": "tcp-PC-B", "ip": "127.0.0.1", "job_id": 1, "motivo": "ERROR_ESCRITURA", "operacion": "submit", "request_id": "tc035-corte", "resultado": "ACEPTADA"}, "job_id": null, "level": "WARN", "message": "Solicitud interrumpida", "ts": "2026-11-22 19:19:37"}
+PASS V2/AC2: bitácora coherente con el estado aplicado.
+PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
+PASS: RF-28 TC-035 sin fallos.
+```
+
+## Ejecucion: 2026-11-23 19:17:31 -0600
+
+```text
+Arrancando 'hermes red start' con HOME temporal...
+PASS V1: submit aceptado persistido íntegro tras el corte y en estado terminal.
+  bitácora: {"context": {"bytes_recibidos": 117, "identidad": "tcp-PC-B", "ip": "127.0.0.1", "job_id": 1, "motivo": "ERROR_ESCRITURA", "operacion": "submit", "request_id": "tc035-corte", "resultado": "ACEPTADA"}, "job_id": null, "level": "WARN", "message": "Solicitud interrumpida", "ts": "2026-11-23 19:17:31"}
+PASS V2/AC2: bitácora coherente con el estado aplicado.
+PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
+PASS: RF-28 TC-035 sin fallos.
+```
