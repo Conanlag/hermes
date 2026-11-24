@@ -169,6 +169,12 @@ esperar(sobre("a", "ping", {"x": 1}), "INVALID_PARAMS", "params de ping")
 esperar(b"{" + b"0" * 16390 + b"}\n", "MESSAGE_TOO_LARGE", "16392 bytes")
 esperar(sobre("bad id", "ping"), "INVALID_REQUEST_ID", "request_id invalido")
 esperar(sobre("a", "nope"), "UNKNOWN_OPERATION", "operacion desconocida")
+esperar(json.dumps({
+    "version": 2,
+    "request_id": "a",
+    "operation": "ping",
+    "params": {}
+}).encode() + b"\n", "UNSUPPORTED_VERSION", "version 2")
 
 # La ventana de 60 s se aplica por codigo: un segundo NUL_BYTE sigue
 # respondiendo con su codigo real, pero no debe añadir otro evento.
@@ -177,7 +183,7 @@ esperar(b'{"version":1,"request_id":"b","operation":"ping","params":{}}\x00\n',
 PY
 comprobar_servicio_vivo
 sleep 0.3
-echo "PASS V1/AC1: diez formatos invalidos rechazados con su codigo propio."
+echo "PASS V1/AC1: once formatos invalidos rechazados con su codigo propio."
 
 # AC2: cada codigo se documenta exactamente una vez, con IP y bytes recibidos.
 python3 - "$EVENTOS" <<'PY'
@@ -196,7 +202,7 @@ rechazos = [e for e in eventos if e.get("message") == "Mensaje rechazado"]
 codigos = [e.get("context", {}).get("codigo") for e in rechazos]
 esperados = ["MESSAGE_TOO_LARGE", "NUL_BYTE", "INVALID_UTF8", "TOO_DEEP", "INVALID_JSON",
              "INVALID_REQUEST", "INVALID_REQUEST_ID", "INVALID_OPERATION",
-             "INVALID_PARAMS", "UNKNOWN_OPERATION"]
+             "INVALID_PARAMS", "UNKNOWN_OPERATION", "UNSUPPORTED_VERSION"]
 
 for codigo in esperados:
     if codigos.count(codigo) != 1:

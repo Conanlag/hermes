@@ -26,8 +26,9 @@ La dirección del ejemplo debe reemplazarse por una dirección real del equipo.
 Los otros equipos conectan a esa dirección y puerto. La configuración se lee al
 arrancar; para cambiarla hay que detener y volver a iniciar el servicio.
 
-`0.0.0.0`, si se configura explícitamente, escucha en todas las interfaces IPv4.
-No equivale a restringir acceso a LAN/VPN. [RNF-13](RNF-13.acceso-remoto-LAN-VPN.md) define los espacios admitidos y
+`0.0.0.0` no está permitido como interfaz: [RNF-26](RNF-26-demostracion-red-privada.md)
+limita la escucha a loopback, redes privadas RFC1918 y el rango compartido de VPN.
+[RNF-13](RNF-13.acceso-remoto-LAN-VPN.md) define los espacios admitidos y
 [RF-20](RF-20.restriccion-redes-direcciones.md) aplica la lista de orígenes
 autorizados mediante `redes_permitidas`.
 El firewall y la topología del entorno pueden impedir el acceso desde otro equipo.

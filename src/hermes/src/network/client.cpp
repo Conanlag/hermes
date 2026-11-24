@@ -233,7 +233,7 @@ int ejecutarClienteRed(int argc, char* argv[]) {
             };
             if (!recibida.is_object()) throw invalida("el sobre no es un objeto");
             if (!recibida.contains("version") || !recibida["version"].is_number_integer() ||
-                recibida["version"] != 1)
+                recibida["version"] != static_cast<int>(VERSION_PROTOCOLO))
                 throw invalida("version ausente o distinta de 1");
             if (!recibida.contains("request_id")) throw invalida("falta request_id");
             // Un request_id nulo solo lo emite errorProtocolo(): identifica un

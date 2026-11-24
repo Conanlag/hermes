@@ -22,7 +22,7 @@ bool claveSuperiorConocida(const std::string& clave) {
 }
 
 std::string errorProtocolo(const std::string& codigo) {
-    return json({{"version", 1}, {"request_id", nullptr}, {"ok", false}, {"error", codigo}}).dump() + '\n';
+    return json({{"version", VERSION_PROTOCOLO}, {"request_id", nullptr}, {"ok", false}, {"error", codigo}}).dump() + '\n';
 }
 
 std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std::string& identidad,
@@ -61,7 +61,7 @@ std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std:
         detalle.procesada = true;
         detalle.aceptada = false;
         detalle.error = codigo;
-        return json({{"version", 1}, {"request_id", id}, {"ok", false}, {"error", codigo}}).dump() + '\n';
+        return json({{"version", VERSION_PROTOCOLO}, {"request_id", id}, {"ok", false}, {"error", codigo}}).dump() + '\n';
     };
     // Rechazo de protocolo con request_id ya interpretado.
     auto rechazoConId = [&](const char* codigo) {
@@ -71,7 +71,8 @@ std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std:
     if (!validarRequestId(id).esValido) return rechazoConId("INVALID_REQUEST_ID");
     if (!solicitud.contains("version") || !solicitud["version"].is_number_integer())
         return rechazoConId("INVALID_VERSION");
-    if (solicitud["version"] != 1) return rechazoConId("UNSUPPORTED_VERSION");
+    if (solicitud["version"] != static_cast<int>(VERSION_PROTOCOLO))
+        return rechazoConId("UNSUPPORTED_VERSION");
     if (!solicitud.contains("operation") || !solicitud["operation"].is_string())
         return rechazoConId("INVALID_OPERATION");
     const auto operacion = solicitud["operation"].get<std::string>();
@@ -84,13 +85,13 @@ std::string procesarSolicitudRedDetallada(const std::string& mensaje, const std:
         if (!solicitud["params"].empty()) return rechazoConId("INVALID_PARAMS");
         detalle.procesada = true;
         detalle.aceptada = true;
-        return json({{"version", 1}, {"request_id", id}, {"ok", true},
+        return json({{"version", VERSION_PROTOCOLO}, {"request_id", id}, {"ok", true},
                      {"result", {{"message", "pong"}}}}).dump() + '\n';
     }
     if (operacion == "submit" || operacion == "query" || operacion == "list" || operacion == "cancel") {
         if (!permisos || identidad.empty()) return responder("UNAUTHORIZED");
         auto resultado = ejecutarOperacionRemota(operacion, solicitud["params"], id, identidad, *permisos);
-        resultado["version"] = 1;
+        resultado["version"] = VERSION_PROTOCOLO;
         resultado["request_id"] = id;
         auto serializado = resultado.dump() + '\n';
         if (serializado.size() > MAX_RESPUESTA_RED) return responder("RESPONSE_TOO_LARGE");

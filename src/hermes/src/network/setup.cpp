@@ -62,7 +62,7 @@ std::string pedirIP(const std::string& texto, const std::string& defecto = "") {
     while (true) {
         const auto ip = preguntar(texto, defecto);
         if (hermes::interfazValida(ip) && hermes::reglaRedValida(ip)) return ip;
-        std::cout << "Use una IPv4 unicast individual (sin /prefijo); también se admite una IP de su LAN fuera de los rangos privados.\n";
+        std::cout << "Use una IPv4 privada, de loopback o VPN (sin /prefijo); no se permiten direcciones públicas.\n";
     }
 }
 std::vector<std::string> interfaces() {

@@ -16,7 +16,8 @@ namespace hermes {
 bool interfazValida(const std::string& interfaz) {
     in_addr direccion{};
     return interfaz.find('\0') == std::string::npos &&
-        inet_pton(AF_INET, interfaz.c_str(), &direccion) == 1;
+        inet_pton(AF_INET, interfaz.c_str(), &direccion) == 1 &&
+        reglaRedValida(interfaz);
 }
 
 bool directorioDatosValido(const std::string& directorio) {
@@ -93,7 +94,7 @@ ConfiguracionSistema cargarConfiguracion() {
     };
     entero("trabajos_maximos", MIN_TRABAJOS_MAXIMOS, MAX_TRABAJOS_MAXIMOS,
            config.trabajosMaximos, true);
-    entero("puerto", 1, 65535, config.puerto, false);
+    entero("puerto", 1024, 65535, config.puerto, false);
     if (datos.contains("interfaz")) {
         if (datos["interfaz"].is_string() && interfazValida(datos["interfaz"].get<std::string>()))
             config.interfaz = datos["interfaz"].get<std::string>();

@@ -13,7 +13,7 @@
 > Ese merge **no cambió el protocolo de red**: `protocol.cpp`, `client.cpp`, `job.cpp`, `cancel.cpp`,
 > `storage.cpp` y `scheduler.cpp` quedaron intactos. Lo que cambió es el comando `red` (nuevo
 > subcomando `setup`), el esquema de `network.json` (campos nuevos) y la política de direcciones
-> admitidas (/32 unicast fuera de RFC1918).
+> admitidas (solo redes privadas, VPN y loopback).
 >
 > Alcance de la auditoría: solo lectura sobre `src/` y `verif/`. El único archivo modificado es este
 > documento.
@@ -563,7 +563,8 @@ dirección **individual** (`/32`, con o sin prefijo explícito) cuando cumple
 Esto habilita autorizar una IP de LAN no privada, por ejemplo `200.39.175.140` o
 `200.39.175.140/32`, sin abrir `200.39.175.0/24`. Se aplica tanto a `config.redes_permitidas`
 como a `network.json` `clientes[].direcciones`. No es una decisión neutral de seguridad: amplía la
-superficie autorizable a cualquier host público concreto y por eso RNF-13 se actualizó (§6.7).
+superficie autorizable a cualquier host público concreto. RNF-26 y RNF-13 fueron alineados
+para rechazar esas excepciones y mantener solo redes privadas, VPN y loopback.
 
 `leer()` normaliza los bits de host en subredes (`192.168.1.25/24 → 192.168.1.0/24`), admite IP sin
 prefijo como `/32` y rechaza prefijos fuera de `[0, 32]`, IPv6, hostnames y `'\0'`. `contenida()`
@@ -600,10 +601,8 @@ Propiedades y no-propiedades:
   (NAT) hereda los permisos del registro (`RF-18:88-92`).
 - `0.0.0.0` como `interfaz` escucha en todas las IPv4, pero no amplía `redes_permitidas`
   (`RF-20:34-35`).
-- El cliente solo conecta a destinos que pasen `reglaRedValida()` (`client.cpp:139`). Tras el merge,
-  esa función también admite una IPv4 unicast individual fuera de RFC1918 (§4.3), así que el cliente
-  puede usar Hermes Red contra una IP pública **concreta** autorizada, pero nunca contra una subred
-  pública completa. Es una restricción del cliente, no del servidor.
+- El cliente solo conecta a destinos que pasen `reglaRedValida()` (`client.cpp:139`). RNF-26 restringe
+  esa función a loopback, RFC1918 y `100.64.0.0/10`; una dirección pública no se usa para la demostración.
 - WSL/Windows: el `portproxy` sustituye la conexión, así que el origen observado es el gateway de
   WSL o la IP del host Windows, no la IP LAN del cliente. Las reglas deben autorizar **ese** origen
   observado (`RF-18`; `docs/user-guide/red-wsl-pc-a-pc-b.md`). Varios equipos detrás de ese proxy
@@ -778,9 +777,34 @@ interfaz escribió `red setup` ni qué origen agregó a `redes_permitidas`. Las 
 | Asistente `red setup`: registra equipo y prepara LAN/WSL | Cumple (nuevo) | `setup.cpp:251-447`; `main.cpp:57`; `help.cpp:26` |
 | `setup` conserva registros, permisos y respaldos | Cumple, con límites: los dos archivos no son atómicos entre sí y no verifica conectividad | `setup.cpp:406-421,442-445` |
 | `servidor`/`equipos` validados al arrancar | **Brecha**: se escriben pero el parser no los lee | `remote.cpp:94-139` |
-| Pruebas `python3 src/hermes/tests/network_remote.py` e `invalid.py` | **Brecha documental**: `src/hermes/tests/` no existe ni está versionado | `git ls-files src/hermes`; ver §6.8 |
+| Pruebas `python3 src/hermes/tests/network_remote.py` e `invalid.py` | **Brecha documental**: `src/hermes/tests/` no existe ni está versionado | `git ls-files src/hermes`; ver §6.10 |
 
-### 6.4 RF-20
+### 6.4 RF-19
+
+| Requisito | Estado | Observación |
+| --- | --- | --- |
+| Operaciones locales y remotas comparten el dominio de Jobs | Cumple | `crearJob()` en `job.cpp:60-188` es usado por el CLI local y por `ejecutarOperacionRemota()` |
+| Consultas locales y remotas presentan el mismo estado | Cumple | `leerJobsSeguros()`, `jobDesdeJson()` y `jsonDesdeJob()` mantienen el mismo modelo |
+| Cancelación local y remota aplica la misma máquina de estados | Cumple | `cancelarJobDetallado()` recibe el propietario remoto solo como filtro; QUEUED, RUNNING y estados terminales se interpretan igual |
+| Deduplicación conserva la semántica de solicitud repetida | Cumple | TC-034 verifica una respuesta duplicada que reutiliza el Job existente |
+| Evidencia | Cumple | TC-034 con admisión remota, deduplicación y consulta; TC-001, TC-004 y TC-005 cubren la semántica local |
+
+La documentación detallada se conserva en [RF-19: semántica local/remota](RF-19.semantica-local-remota.md).
+
+### 6.5 RF-21
+
+| Requisito | Estado | Observación |
+| --- | --- | --- |
+| Delimitación de mensajes | Cumple | Un mensaje JSON se delimita con `\n`; el servidor interpreta solo el primer mensaje completo |
+| Identificación de errores | Cumple | El servidor devuelve códigos deterministas en el sobre `{"ok":false,"error":"..."}` |
+| Lecturas parciales | Cumple | `recv()` acumula los fragmentos hasta encontrar `\n` o vencer el plazo |
+| Escrituras parciales | Cumple | Los bucles de envío avanzan con el contador `enviado` hasta transmitir toda la solicitud o respuesta |
+| Validación de longitud y formato | Cumple | Límites de petición/respuesta, UTF-8, NUL, profundidad y clave superior se validan antes del despacho |
+| Evidencia | Cumple | TC-031 cubre mensajes lentos; TC-039 formatos inválidos; TC-040/41 errores de respuesta; TC-042 un envío con dos mensajes |
+
+La documentación detallada se conserva en [RF-21: protocolo delimitado y manejo de errores](RF-21.protocolo-delimitado-errores.md).
+
+### 6.6 RF-20
 
 | Requisito | Estado | Observación |
 | --- | --- | --- |
@@ -791,10 +815,10 @@ interfaz escribió `red setup` ni qué origen agregó a `redes_permitidas`. Las 
 | Lista vacía deniega todo | Cumple | `access.cpp:54-59` (bucle sin reglas → `false`) |
 | Lista inválida → falla antes de abrir el puerto | Cumple | `config.cpp:107-126`; `server.cpp:73-74` |
 | Una regla inválida invalida toda la lista | Cumple | `access.cpp:52-53` |
-| IP pública individual explícita (`/32`) | Cumple (nuevo): la clase de dirección ya no bloquea un host concreto; sigue rechazando subredes públicas | `access.cpp:42-45`; RF-20, sección "IP individual fuera de los rangos privados" |
-| Pruebas | **Brecha**: RF-20 sigue declarando que no hay TC de red | `RF-20`; ver §6.8 |
+| IP pública individual explícita (`/32`) | Rechazada por RNF-26 | `access.cpp:33-48`; RNF-26 |
+| Pruebas | **Brecha**: RF-20 sigue declarando que no hay TC de red | `RF-20`; ver §6.10 |
 
-### 6.5 RNF-08
+### 6.7 RNF-08
 
 | Requisito | Estado | Observación |
 | --- | --- | --- |
@@ -815,7 +839,7 @@ interfaz escribió `red setup` ni qué origen agregó a `redes_permitidas`. Las 
 | Ctrl+C/SIGTERM libera sockets | Cumple | `server.cpp:95-96,191-193` |
 | Filtro RF-20 antes del protocolo | Cumple | `server.cpp:178` |
 
-### 6.6 RNF-12
+### 6.8 RNF-12
 
 | Requisito | Estado | Observación |
 | --- | --- | --- |
@@ -829,20 +853,20 @@ interfaz escribió `red setup` ni qué origen agregó a `redes_permitidas`. Las 
 El punto anterior no es un defecto de código: es **documentación desactualizada**. RF-18 exige que el
 servidor procese trabajos con su scheduler local, por lo que RNF-12 quedó obsoleto en esa frase.
 
-### 6.7 RNF-13
+### 6.9 RNF-13
 
 | Requisito | Estado | Evidencia |
 | --- | --- | --- |
 | Subredes contenidas en loopback/RFC1918/`100.64.0.0/10` | Cumple | `access.cpp:36-41` |
-| IP unicast individual explícita fuera de esos espacios (`/32`) | Cumple por decisión documentada en RNF-13; antes se rechazaba | `access.cpp:42-45`; RNF-13, "Espacios admitidos" |
+| IP unicast pública explícita fuera de esos espacios (`/32`) | Rechazada por RNF-26 | `access.cpp:33-48`; RNF-26 |
 | Normalización de bits de host en subredes | Cumple (`access.cpp:22-23`) |
 | Rechazo de DNS, IPv6, prefijos fuera de rango, `0.0.0.0/0` | Cumple (`access.cpp:8-25`) |
 | Rechazo de `0.0.0.0/8`, `224/4` y superiores, `169.254.0.0/16` | Cumple (`access.cpp:44-45`) |
 | Default solo loopback | Cumple (`config.h:26`) |
 | `0.0.0.0` no amplía autorización | Cumple (filtro independiente) |
-| Verificación `src/hermes/tests/network_access.sh` | **Brecha documental**: el archivo no existe (ver §6.8) |
+| Verificación `src/hermes/tests/network_access.sh` | **Brecha documental**: el archivo no existe (ver §6.10) |
 
-### 6.8 Cobertura de verificación existente: estado real
+### 6.10 Cobertura de verificación existente: estado real
 
 **Hallazgo principal: el subsistema de red no tiene ni una sola prueba automatizada.** La búsqueda en
 `verif/` de `red`, `network.json`, `redes_permitidas`, `UNAUTHORIZED`, `PROGRAM_NOT_ALLOWED`,
@@ -912,11 +936,11 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
   bloques Markdown).
 - `.gitattributes` fuerza `eol=lf` en `verif/scripts/*.sh`.
 
-### 6.9 Deuda técnica priorizada
+### 6.11 Deuda técnica priorizada
 
 | # | Hallazgo | Impacto | Evidencia |
 | --- | --- | --- | --- |
-| D1 | **Cero pruebas automatizadas del subsistema de red**; la matriz marca RF-16/18/20 y RNF-12/13 como `Pendiente` | Cualquier cambio en red es una regresión silenciosa | `verif/verification-plan/traceability-matrix.md:21,23,25,46,47`; §6.8 |
+| D1 | **Cero pruebas automatizadas del subsistema de red**; la matriz marca RF-16/18/20 y RNF-12/13 como `Pendiente` | Cualquier cambio en red es una regresión silenciosa | `verif/verification-plan/traceability-matrix.md:21,23,25,46,47`; §6.10 |
 | D2 | `errorProtocolo()` devuelve `request_id: null` y el cliente exige que coincida, así que `MESSAGE_TOO_LARGE`, `INCOMPLETE_MESSAGE` y `REQUEST_TIMEOUT` se muestran como *Respuesta inválida del servidor* | Diagnóstico engañoso; se pierde el código real | `protocol.cpp:9`; `client.cpp:178` |
 | D3 | ~~`esperarInicioJob()` duerme hasta 1 s dentro del hilo de `poll()`~~ **Resuelto en RF-22**: la rama `submit` ya no espera al scheduler y responde con `pid: 0` | Bloqueo de cabeza de línea eliminado; `esperarInicioJob` sigue usándose solo en el CLI local | `remote.cpp:160-166`; `verif/scripts/TC-029.sh` |
 | D4 | ~~Cero `EventLog` en el módulo de red~~ **Parcialmente resuelto en RF-22**: se registran desconexiones anómalas, conexiones rechazadas y errores internos con ventana de 60 s; faltan `UNAUTHORIZED` / `PROGRAM_NOT_ALLOWED` / `INVALID_*` | Hay evidencia forense de desconexiones y rechazos de red; los rechazos de autorización siguen sin rastro | `server.cpp:105-117,195-202,288-300`; `verif/scripts/TC-028.sh` |
@@ -927,7 +951,7 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
 | D9 | Un solo hilo y sin `TCP_NODELAY`/`SO_KEEPALIVE` | Latencia extra y sin detección temprana de pares muertos | `server.cpp:86-93` |
 | D10 | Solo IPv4 en cliente y servidor | Sin soporte IPv6 aunque la red lo requiera | `client.cpp:127`; `server.cpp:81` |
 | D11 | RNF-12 afirma que `red start` no inicia el scheduler | Contradice la implementación vigente y confunde al operador | `RNF-12:9` vs. `server.cpp:76-79` |
-| D12 | Documentación de pruebas apunta a `src/hermes/tests/`, inexistente | Verificación no reproducible siguiendo la doc; el merge actualizó RF-18/RF-20/RNF-13 pero **mantuvo** esas rutas | §6.8 |
+| D12 | Documentación de pruebas apunta a `src/hermes/tests/`, inexistente | Verificación no reproducible siguiendo la doc; el merge actualizó RF-18/RF-20/RNF-13 pero **mantuvo** esas rutas | §6.10 |
 | D13 | Toda ejecución de Hermes crea el directorio de red y `network.json`, incluso comandos locales o `red job`; y el cliente sigue creando `jobs.json`/`events.jsonl` | Efecto lateral en equipos cliente y fallo de arranque si `~/.local/share/hermes/network` no es escribible | `main.cpp:33`; `remote.cpp:42-84`; `data_paths.h:111-117` |
 | D14 | Sin límite de frecuencia ni de conexiones por origen; el único control es el cupo total de 32 | Un solo origen autorizado puede agotar los cupos | `server.cpp:178` |
 | D15 | Errores de `network.json` incompleto provienen de `nlohmann::json` (`at()`/`get`) | Mensajes internos poco accionables para el operador | `remote.cpp:106-136` |
@@ -936,9 +960,9 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
 | D18 | `servidor`, `equipos` y `clientes[].tipo` se escriben pero nunca se validan ni se usan al arrancar | Deriva silenciosa: `servidor.interfaz` puede no coincidir con `config.interfaz`, `equipos[].acceso` puede apuntar a un registro inexistente | `remote.cpp:94-139`; `setup.cpp:369-392` |
 | D19 | El enlace `src/hermes/network` está versionado con el destino absoluto de otra máquina (`/home/leo/...`) y solo se repara con `argc == 1` | Clones nuevos ven un enlace roto hasta ejecutar `./hermes` sin argumentos; si hay un directorio real, el arranque falla | `src/hermes/network`; `data_paths.h:134-148`; `main.cpp:35` |
 | D20 | `red setup` solo se enruta con `argc == 3`; `red setup <algo>` cae al cliente y aborta con un error de uso; además exige `reglasRedValidas` y un `network.json` legible | Diagnóstico confuso para el operador y dependencia implícita del arranque previo | `main.cpp:57`; `setup.cpp:259-265` |
-| D21 | La excepción /32 amplía la superficie autorizable a cualquier host público concreto y el cliente ahora también conecta a él | Cambio de postura de seguridad que depende solo de la disciplina del operador; RNF-13 quedó relajado | `access.cpp:42-45`; `client.cpp:139` |
+| D21 | ~~La excepción /32 amplía la superficie autorizable a cualquier host público concreto y el cliente también conecta a él~~ **Corregido por RNF-26** | Se elimina la excepción pública; solo se aceptan loopback, RFC1918 y `100.64.0.0/10` | `access.cpp:33-48`; `client.cpp:139`; RNF-26 |
 
-### 6.10 Casos borde no cubiertos por el diseño actual
+### 6.12 Casos borde no cubiertos por el diseño actual
 
 - **NAT/portproxy**: varios equipos tras la misma IP observada comparten registro, identidad y
   permisos (`RF-18`). `setup` los separa en `equipos` solo para el firewall de Windows; Hermes sigue
@@ -1088,7 +1112,7 @@ make -C src/hermes          # find src -name '*.cpp' incluye archivos nuevos
 - Si el cambio altera comportamiento observable del CLI remoto, añadir el caso a
   `verif/test-cases/` **y** el script a `verif/scripts/` con su entrada en `verif/results/`.
 
-Restricciones del arnés de pruebas (ver §6.8):
+Restricciones del arnés de pruebas (ver §6.10):
 
 - Los scripts son **bash puro y solo Linux/WSL** (`/proc`, `setsid`, `pkill`, `pcregrep`/`grep -P`,
   `compgen`). No se ejecutan desde PowerShell; usar WSL.

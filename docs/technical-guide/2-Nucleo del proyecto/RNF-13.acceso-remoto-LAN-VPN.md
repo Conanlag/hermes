@@ -14,15 +14,10 @@ Las reglas de subred deben estar contenidas íntegramente en uno de estos espaci
 - Privados RFC1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`.
 - Compartido para VPN que lo utilicen: `100.64.0.0/10`.
 
-También se admiten direcciones unicast individuales explícitas, sin prefijo o
-con `/32`, aunque estén fuera de RFC1918: por ejemplo `200.39.175.140` asignada
-a un equipo de una LAN. La clase de dirección no prueba por sí sola si el
-equipo está en una LAN, VPN o Internet. Esta excepción permite registrar un
-equipo concreto; no habilita subredes públicas como `200.39.175.0/24`.
-
 Los bits de host de las subredes privadas se normalizan. Se rechazan nombres
 DNS, IPv6, prefijos fuera de 0–32, tipos JSON incorrectos, `0.0.0.0/0`, el
 espacio 0/8, multicast/reservado 224/4 y superiores y link-local 169.254/16.
+Las direcciones públicas individuales también se rechazan para cumplir RNF-26.
 El servidor sigue exigiendo una coincidencia exacta con los permisos configurados.
 
 ## Política de acceso
@@ -47,6 +42,9 @@ Las pruebas de `src/hermes/tests/network_access.sh` comprueban los límites de
 los espacios privados, loopback y VPN compartida, y el rechazo de direcciones
 no autorizadas y subredes fuera de los espacios admitidos; las IP unicast
 individuales explícitas se verifican como excepciones /32.
+
+La exposición directa a Internet no forma parte de la demostración: [RNF-26](RNF-26-demostracion-red-privada.md)
+restringe interfaces y orígenes a redes privadas y VPN.
 
 La configuración y aplicación de la lista se describen en
 [RF-20: Restricción a redes y direcciones permitidas](RF-20.restriccion-redes-direcciones.md).
