@@ -109,7 +109,8 @@ Antes de enrutar cualquier comando, `main()` ejecuta `inicializarConfiguracionRe
 9. El scheduler local (`src/hermes/src/scheduler/scheduler.cpp`) toma el Job, lo ejecuta y actualiza
    el estado en `jobs.json`.
 10. El servidor responde un objeto JSON con `version`, `request_id`, `ok` y `result`/`error`, y
-    **cierra la conexión** (`server.cpp:155`).
+    **deja la conexión abierta** para la siguiente solicitud (`server.cpp:284-403`). Un rechazo de
+    protocolo o tres segundos de inactividad sí la cierran.
 11. El cliente valida la respuesta (`client.cpp:177-181`) e imprime con las funciones compartidas de
     presentación (`mostrarAdmisionJob`, `mostrarDetalleJob`, `mostrarResumenJob` en
     `src/hermes/src/job/presentation.cpp`).
@@ -122,9 +123,9 @@ Antes de enrutar cualquier comando, `main()` ejecuta `inicializarConfiguracionRe
 | Sin autenticación criptográfica: la identidad es la IP observada | `network_remote.h:13-16`; `server.cpp:182-188` |
 | Sin transmisión de `stdout`/`stderr` remotos | `RF-18:145-149`; el Job persistido no guarda salidas (`job.cpp:174-191`) |
 | Sin distribución a clientes ejecutores | `RF-18:7-10`; no existe código de reenvío |
-| Sin sesiones persistentes ni reconexión | una conexión = un mensaje (`RNF-08:3-6`) |
+| Sin sesiones persistentes ni multiplexación | una invocación = una conexión con N solicitudes secuenciales (`RNF-24`); sin estado entre invocaciones |
+| Varias solicitudes por conexión, en orden FIFO; se conservan los bytes tras cada `\n` | `RNF-24`; `server.cpp:284-346` |
 | Sin `red status` / `red stop` / daemonización | `RNF-12:9-11` |
-| Un mensaje por conexión; el resto se ignora | `RNF-08:5-6`; `server.cpp:155` |
 | Límite de 16 KiB de entrada y 256 KiB de respuesta | `network_protocol.h:5`; `protocol.cpp:13,50` |
 | Solo IPv4 (`AF_INET`) en cliente y servidor | `server.cpp:81`; `client.cpp:127` |
 | Máximo 32 clientes TCP concurrentes | `server.cpp:178` |
@@ -205,16 +206,18 @@ setup.cpp ──► config_update.cpp (actualizarConfiguracion) / data_paths.h
 | --- | --- | --- |
 | Transporte | TCP sobre IPv4 (`AF_INET`, `SOCK_STREAM`) | `server.cpp:81,86`; `client.cpp:127-128,140` |
 | Codificación | JSON UTF-8 (nlohmann/json) | `protocol.cpp:16`; `client.cpp:124,177` |
-| Delimitador | `'\n'` al final del objeto; un mensaje por conexión | `RNF-08:3-6`; `server.cpp:138-143` |
-| Tamaño máximo de entrada | 16 384 bytes, sin contar el delimitador | `network_protocol.h:5`; `protocol.cpp:13`; `server.cpp:139-141` |
-| Tamaño máximo de respuesta | 262 144 bytes (238 KiB nominales) | `protocol.cpp:50`; cliente rechaza >262144 en `client.cpp:175` |
+| Delimitador | `'\n'` al final de cada objeto; varias solicitudes secuenciales por conexión | `server.cpp:284-346`; `RNF-24` |
+| Tamaño máximo de entrada | 16 384 bytes por mensaje, sin contar el delimitador | `network_protocol.h:5`; `protocol.cpp:13`; `server.cpp:291-320` |
+| Tamaño máximo de respuesta | 262 144 bytes (238 KiB nominales) | `protocol.cpp:50`; cliente rechaza >262144 en `client.cpp:187` |
 | Profundidad JSON | máx. 32 niveles → `INVALID_JSON` | `protocol.cpp:16-19` |
-| Sockets | no bloqueantes + `SOCK_CLOEXEC`; cliente `MSG_NOSIGNAL`; servidor ignora `SIGPIPE` | `server.cpp:86,150,170`; `client.cpp:140,159`; `server.cpp:46-53` |
-| Plazos | 3 s absolutos de lectura desde `accept`; 3 s para completar la escritura; cliente 10 s total | `server.cpp:101,127,159-162`; `client.cpp:135` |
-| Cierre | el servidor cierra tras enviar la respuesta completa | `server.cpp:155` |
+| Sockets | no bloqueantes + `SOCK_CLOEXEC`; cliente `MSG_NOSIGNAL`; servidor ignora `SIGPIPE` | `server.cpp:86,150,170`; `client.cpp:148-177`; `server.cpp:46-53` |
+| Plazos | 3 s de inactividad en lectura, renovados con cada fragmento y cada respuesta entregada; 3 s para completar la escritura; cliente 10 s por solicitud | `server.cpp:359,401,443-450`; `client.cpp:167-194` |
+| Cierre | la conexión sigue abierta tras una respuesta aceptada; cierra tras un rechazo de protocolo o tres segundos de inactividad | `server.cpp:394-397,443-450` |
 
-El servidor acumula bytes hasta encontrar `'\n'`; no hay protocolo de longitud explícita ni
-multiplexación. Enviar dos mensajes en la misma conexión implica que el segundo nunca se procesa.
+El servidor acumula bytes hasta encontrar `'\n'`, atiende el mensaje completo y conserva el resto como
+la solicitud siguiente. Las solicitudes de una conexión se atienden en orden, de una en una: mientras
+hay una respuesta pendiente no se consume el mensaje siguiente, de modo que una ráfaga encolada no
+crece en memoria. No hay protocolo de longitud explícita ni multiplexación de respuestas.
 
 ### 3.2 Sobre de petición
 
@@ -621,29 +624,34 @@ Propiedades y no-propiedades:
 - `accept4(..., SOCK_CLOEXEC | SOCK_NONBLOCK)`; `EINTR`, `EAGAIN`, `EWOULDBLOCK` y `ECONNABORTED` se
   ignoran (`server.cpp:169-175`).
 - Cada cliente es un `struct Cliente` con `esperado` (`POLLIN`/`POLLOUT`), buffers `entrada`/`salida`,
-  contador `enviado`, `limite` temporal y bandera `cerrado` (`server.cpp:100-110`).
+  contador `enviado`, `limite` temporal, bandera `cerrado`, `cerrarTrasEnviar` y `bytesSolicitud`
+  (`server.cpp:173-195`).
 - La respuesta se encola con el lambda `responder()` y se envía por partes respetando escrituras
-  parciales (`server.cpp:124-128,149-158`).
-- Un cliente se elimina del vector al completar el envío, al detectar error/cierre o al vencer el
-  plazo de escritura (`server.cpp:164-165`).
+  parciales (`server.cpp:209-214,379-403`). Al completar una respuesta aceptada, `esperado` vuelve a
+  `POLLIN` y la conexión queda lista para el mensaje siguiente.
+- Un cliente se elimina del vector cuando un rechazo termina su respuesta, al detectar error/cierre,
+  al vencer el plazo o al completar un FIN ordenado (`server.cpp:394-397,443-450`).
 
 Máquina de estados por cliente:
 
 ```
-accept → (POLLIN) recv* → '\n' encontrado → procesarSolicitudRed → responder()
-       → (POLLOUT) send* → enviado == salida.size() → cerrado → close
-       → timeout sin datos → responder(REQUEST_TIMEOUT) → (POLLOUT) ...
-       → timeout con datos pendientes → cerrado
-       → recv == 0 → responder(INCOMPLETE_MESSAGE)
+accept → (POLLIN) recv → acumular fragmentos → '\n' encontrado → procesarSolicitudRed → responder()
+       → (POLLOUT) send* → entregada → POLLIN → siguiente mensaje (bucle)
+       → rechazo de protocolo/framing → send* → cerrado → close
+       → timeout de inactividad sin datos → responder(REQUEST_TIMEOUT) → cerrado
+       → recv == 0 con búfer vacío y transacción atendida → cerrado (silencioso)
+       → recv == 0 con bytes sin delimitador → responder(INCOMPLETE_MESSAGE) → cerrado
 ```
 
 ### 5.2 Plazos y resistencia a clientes lentos
 
-- `limite` se fija al aceptar: `now + 3 s` (`server.cpp:101`). Es un plazo **absoluto**, no se
-  reinicia con cada byte, así que un emisor lento no puede extenderlo.
-- Al encolar una respuesta, `limite` se renueva a `now + 3 s` para la escritura (`server.cpp:127`).
+- `limite` se renueva a `now + 3 s` con cada `recv()` que devuelve bytes y con cada respuesta
+  entregada (`server.cpp:359,401`). Es un plazo de **inactividad**, no absoluto: un emisor lento que
+  avanza no lo extiende más allá de tres segundos desde su último byte, pero un mensaje fragmentado
+  que progresa nunca se corta a mitad.
+- Al encolar una respuesta, `limite` se renueva a `now + 3 s` para la escritura (`server.cpp:213`).
 - El almacenamiento de entrada está acotado: se añade como máximo un bloque de 4096 bytes por
-  lectura y se comprueba el límite después (`server.cpp:134-141`), por lo que `entrada` puede superar
+  lectura y el límite se evalúa por mensaje (`server.cpp:291-320`), por lo que `entrada` puede superar
   16 384 en hasta un bloque antes de emitir `MESSAGE_TOO_LARGE`.
 - Un error de lectura/escritura afecta solo al cliente correspondiente; `MSG_NOSIGNAL` y la
   ignorancia de `SIGPIPE` evitan terminar el proceso.
@@ -790,17 +798,18 @@ interfaz escribió `red setup` ni qué origen agregó a `redes_permitidas`. Las 
 
 | Requisito | Estado | Observación |
 | --- | --- | --- |
-| Un mensaje JSON por conexión, delimitado por `\n` | Cumple | `server.cpp:138-143,155` |
-| Acumulación de fragmentos TCP | Cumple | `server.cpp:134-143` |
-| Cierre tras responder; mensajes extra ignorados | Cumple | `server.cpp:155` |
+| Mensajes JSON delimitados por `\n`, varias solicitudes secuenciales por conexión | Cumple | `server.cpp:284-346`; `RNF-24` |
+| Acumulación de fragmentos TCP sin plazo absoluto | Cumple | `server.cpp:347-361` |
+| FIN ordenado silencioso; `INCOMPLETE_MESSAGE` solo con bytes pendientes | Cumple | `server.cpp:362-372` |
+| Cierre tras un rechazo de protocolo o tres segundos de inactividad | Cumple | `server.cpp:394-397,443-450` |
 | `version` entero 1, `request_id` 1-128, `operation` string, `params` objeto | Cumple | `protocol.cpp:24-37` |
 | `request_id: null` cuando falta o es inválido | Cumple | `protocol.cpp:8-10,24-27` |
 | Validación antes de convertir enteros | Cumple (`from_chars`, `is_number_integer`) | `protocol.cpp:31-32`; `client.cpp:49-56` |
 | Tabla de errores completa | Cumple | `protocol.cpp:13-53`; §3.6 |
 | ≤32 clientes, excedente cerrado | Cumple | `server.cpp:178` |
-| Plazo absoluto de 3 s de lectura | Cumple | `server.cpp:101,159-162` |
-| 3 s para completar la escritura | Cumple | `server.cpp:127,159-161` |
-| Entrada acotada a límite + 4096 | Cumple, con el matiz del bloque completo | `server.cpp:134-141` |
+| Plazo de 3 s de lectura, renovado por fragmento y por respuesta | Cumple | `server.cpp:359,401,443-450` |
+| 3 s para completar la escritura | Cumple | `server.cpp:213,443-450` |
+| Entrada acotada a límite + 4096, evaluada por mensaje | Cumple, con el matiz del bloque completo | `server.cpp:291-320` |
 | Error de un cliente no afecta a otros | Cumple | `server.cpp:132,146-147,156-157` |
 | `MSG_NOSIGNAL` / `SIGPIPE` | Cumple | `server.cpp:46-53,150`; `client.cpp:27-36,159` |
 | Ctrl+C/SIGTERM libera sockets | Cumple | `server.cpp:95-96,191-193` |
@@ -922,7 +931,7 @@ Convenciones del arnés existente (`verif/scripts/README.md` y los nueve scripts
 | D13 | Toda ejecución de Hermes crea el directorio de red y `network.json`, incluso comandos locales o `red job`; y el cliente sigue creando `jobs.json`/`events.jsonl` | Efecto lateral en equipos cliente y fallo de arranque si `~/.local/share/hermes/network` no es escribible | `main.cpp:33`; `remote.cpp:42-84`; `data_paths.h:111-117` |
 | D14 | Sin límite de frecuencia ni de conexiones por origen; el único control es el cupo total de 32 | Un solo origen autorizado puede agotar los cupos | `server.cpp:178` |
 | D15 | Errores de `network.json` incompleto provienen de `nlohmann::json` (`at()`/`get`) | Mensajes internos poco accionables para el operador | `remote.cpp:106-136` |
-| D16 | Una conexión por operación, sin reutilización | Handshake completo por cada `submit`/`filter`; coste, no defecto | `server.cpp:155` |
+| D16 | ~~Una conexión por operación, sin reutilización~~ **Resuelto en RNF-24**: una invocación del cliente abre un socket y lo reutiliza mientras encadene solicitudes; la paginación de `filter` viaja sobre una sola conexión | El handshake por página desaparece contra el servidor actual; el reintento único solo cubre la paginación de solo lectura | `client.cpp:128-220,260-303`; `verif/scripts/TC-056.sh` |
 | D17 | `red setup` escribe `config.json` y `network.json` sin transacción conjunta; si falla el segundo, el primero queda aplicado | Estado incoherente que exige reparación manual; el asistente solo avisa en `stderr` | `setup.cpp:413-420,442-445` |
 | D18 | `servidor`, `equipos` y `clientes[].tipo` se escriben pero nunca se validan ni se usan al arrancar | Deriva silenciosa: `servidor.interfaz` puede no coincidir con `config.interfaz`, `equipos[].acceso` puede apuntar a un registro inexistente | `remote.cpp:94-139`; `setup.cpp:369-392` |
 | D19 | El enlace `src/hermes/network` está versionado con el destino absoluto de otra máquina (`/home/leo/...`) y solo se repara con `argc == 1` | Clones nuevos ven un enlace roto hasta ejecutar `./hermes` sin argumentos; si hay un directorio real, el arranque falla | `src/hermes/network`; `data_paths.h:134-148`; `main.cpp:35` |
@@ -997,19 +1006,21 @@ Checklist por tipo de cambio. Marcar cada archivo que deba actualizarse **antes*
 
 | Archivo | Qué revisar |
 | --- | --- |
-| `include/network_protocol.h` | `MAX_MENSAJE_RED` |
+| `include/network_protocol.h` | `MAX_MENSAJE_RED`, `MAX_RESPUESTA_RED` |
 | `src/network/protocol.cpp` | Validación del sobre, `version`, `errorProtocolo`, límite de respuesta |
-| `src/network/client.cpp` | Espejo exacto: construcción del sobre (`124`), validación de respuesta (`177-181`), límite del cliente (`175`) |
-| `src/network/server.cpp` | Framing, límite de acumulación, plazos |
+| `src/network/client.cpp` | Espejo exacto: construcción del sobre (`124`), recepción con búfer residual y límite del cliente (`167-195`), reintento de paginación (`197-220`) |
+| `src/network/server.cpp` | Framing por mensaje, límite evaluado por solicitud, orden FIFO entre lecturas y respuestas, plazo de inactividad y cierre tras rechazo (`288-403,443-450`) |
 | `RNF-08` | Tabla de errores, framing, límites |
+| `RNF-24` | Varias solicitudes por conexión, fragmentación, cierre ordenado |
 | `RF-18` | Tabla `operation/params` y errores |
-| `verif/` | Casos negativos: mensaje incompleto, demasiado grande, timeout, versión no soportada |
+| `verif/` | Casos negativos: mensaje incompleto, demasiado grande, timeout, versión no soportada; y los de RNF-24: fragmentado lento, secuencia larga, exceso de framing |
 
 Regla práctica: **todo límite numérico debe declararse una sola vez** (idealmente en
 `network_protocol.h`) y consumirse desde cliente y servidor. Hoy `262144` está duplicado.
 
-El merge `858e3b1` no modificó esta capa: `network_protocol.h`, `protocol.cpp` y `client.cpp` siguen
-igual. Cualquier cambio de versión o de límites es una decisión nueva, no una herencia del merge.
+El merge `858e3b1` no modificó esta capa. **RNF-24 sí la modificó**: `server.cpp` y `client.cpp`
+pasaron de una transacción por conexión a varias secuenciales. `network_protocol.h` y
+`protocol.cpp` siguen intactos porque el validador es sin estado y recibe cada mensaje por separado.
 
 ### 7.3 Nueva regla de autorización o de direcciones
 

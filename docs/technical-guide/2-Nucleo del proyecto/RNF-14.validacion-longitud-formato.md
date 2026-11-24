@@ -17,7 +17,7 @@ El eje del requisito es que **un mensaje inválido nunca se confunda con otro ti
 **Consideraciones actuales:**
 
 - **Sí hace:** aplica límites únicos y con nombre a petición (`16384`) y respuesta (`262144`); valida el mensaje crudo antes de interpretarlo (bytes nulos, UTF-8, longitud); limita el anidamiento JSON a 32 niveles con un código propio; rechaza claves desconocidas en el nivel superior del sobre; acota la longitud de `operation`; valida texto de red (NUL, controles C0, DEL y UTF-8) en `programa`, `argumentos`, `tipo` y `valor`; y valida en el cliente longitud, delimitador, NUL, JSON, versión y coherencia del sobre.
-- **No hace:** no repara el mensaje ni intenta interpretarlo parcialmente; no aplica topes de longitud por campo de texto más allá del total del mensaje y los 128 de `request_id`; no implementa un canal de negociación de versión —`version: 1` sigue siendo obligatoria—; y no cambia el framing: un mensaje por conexión.
+- **No hace:** no repara el mensaje ni intenta interpretarlo parcialmente; no aplica topes de longitud por campo de texto más allá del total del mensaje y los 128 de `request_id`; no implementa un canal de negociación de versión —`version: 1` sigue siendo obligatoria—; y no cambia el framing delimitado por `\n` —cuántas solicitudes caben en una conexión es competencia de RNF-24, no de este requisito—.
 - **No cambia:** el sobre JSON (`version`, `request_id`, `ok`, `error`, `result`), el delimitador `\n`, los códigos de error existentes ni el esquema persistido de trabajos.
 
 ---
@@ -152,6 +152,8 @@ if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
 
 El primer caso corta antes de encontrar el delimitador; el segundo, cuando el delimitador aparece más allá del límite. Ambos producen el mismo código y el mismo registro.
 
+**Nota de vigencia:** RNF-24 trasladó estas comprobaciones a un bucle que atiende varios mensajes por conexión y las expresó por mensaje (`fin > MAX_MENSAJE_RED`) en lugar de por búfer total. La decisión que documenta este apartado —código único, registro en el rechazo y cierre del descriptor— no cambió.
+
 El registro ocurre **en el rechazo**, no al cerrar la conexión, porque en ese instante el diagnóstico ya existe y el cliente puede desaparecer antes de que la conexión se clasifique:
 
 ```cpp
@@ -174,7 +176,7 @@ La ventana de 60 s es una tabla fija de doce códigos, con un sello de tiempo po
 
 `registrar()` (RF-28) retorna de inmediato si `formatoInvalido` está activo, para no documentar dos veces el mismo rechazo. Los desenlaces de negocio no se ven afectados: su `formatoInvalido` es `false` y siguen apareciendo como `Solicitud interrumpida`.
 
-**Bytes posteriores al primer `\n`:** se descartan con la conexión. `responder()` arma `POLLOUT` y, al terminar el envío, el cliente se marca cerrado. Es intencional: el protocolo es de un mensaje por conexión, y procesar un segundo sobre sin haberlo validado como petición independiente abriría una vía de confusión.
+**Bytes posteriores al primer `\n`:** cuando RNF-14 se implementó se descartaban con la conexión, porque el protocolo era de un mensaje por conexión. **RNF-24 sustituyó ese comportamiento**: los bytes posteriores al delimitador quedan en el búfer como solicitud siguiente y se validan de forma independiente, con las mismas reglas de este documento. La garantía de RNF-14 se mantiene intacta —ningún sobre se procesa sin validar—; lo que cambia es dónde termina la conexión. El rechazo de formato sigue cerrando el descriptor tras responder, para que el flujo no quede desincronizado.
 
 ### `src/network/client.cpp` — la mitad que faltaba
 
@@ -290,7 +292,7 @@ Cuatro casos automatizados nuevos, ejecutados el 2026-11-19 en WSL Ubuntu. Todos
 | **TC-039** | Diez formatos inválidos + repetición de uno | Los diez códigos propios; `10` eventos para `10` códigos; ningún duplicado como `Solicitud interrumpida`; `ping` posterior correcto |
 | **TC-040** | Cliente contra tres sobres con `request_id: null` | `MESSAGE_TOO_LARGE`, `REQUEST_TIMEOUT` y `RESPONSE_TOO_LARGE` reportados con su código; sin `json.exception` |
 | **TC-041** | Cliente contra siete respuestas mal formadas | Las siete rechazadas con diagnóstico propio; sin `json.exception`, `type_error` ni `[json` |
-| **TC-042** | Dos sobres en un solo `write` | Solo responde `tc042-primero`; `jobs.json` con `1` Job y sin rastro del segundo |
+| **TC-042** | Sobre válido y sobre inválido en un solo `write` | El válido responde y crea `1` Job; el inválido responde `UNSUPPORTED_VERSION` y no deja rastro (caso reescrito por RNF-24, que ya no descarta el segundo mensaje) |
 
 **Regresión.** TC-030 a TC-038 (RF-22 y RF-28) se reejecutaron y siguen en `PASS`, trece scripts en total. Compilación completa con `g++ -Wall -Wextra -std=c++17` sin advertencias.
 

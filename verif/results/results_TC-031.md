@@ -78,3 +78,33 @@ PASS V5: cliente lento expulsado y cupo recuperado.
 PASS V6: desconexión durante una respuesta grande; servicio y bucle intactos.
 PASS: RF-22 T-10 (V4-V6) sin fallos.
 ```
+
+## Ejecucion: 2026-11-22 19:11:23 -0600
+
+```text
+PASS V4: 40 desconexiones y ping posterior en 62 ms.
+cliente lento expulsado en 3.0s
+PASS V5: cliente lento expulsado y cupo recuperado.
+PASS V6: desconexión durante una respuesta grande; servicio y bucle intactos.
+PASS: RF-22 T-10 (V4-V6) sin fallos.
+```
+
+## Ejecucion: 2026-11-22 19:19:26 -0600
+
+```text
+PASS V4: 40 desconexiones y ping posterior en 114 ms.
+cliente lento expulsado en 3.0s
+PASS V5: cliente lento expulsado y cupo recuperado.
+PASS V6: desconexión durante una respuesta grande; servicio y bucle intactos.
+PASS: RF-22 T-10 (V4-V6) sin fallos.
+```
+
+## Ejecucion: 2026-11-23 19:17:17 -0600
+
+```text
+PASS V4: 40 desconexiones y ping posterior en 82 ms.
+cliente lento expulsado en 3.0s
+PASS V5: cliente lento expulsado y cupo recuperado.
+PASS V6: desconexión durante una respuesta grande; servicio y bucle intactos.
+PASS: RF-22 T-10 (V4-V6) sin fallos.
+```
