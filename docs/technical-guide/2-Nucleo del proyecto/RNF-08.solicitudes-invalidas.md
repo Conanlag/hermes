@@ -1,9 +1,12 @@
 # RNF-08: Una solicitud inválida no termina el servicio
 
-El servidor procesa un mensaje por conexión TCP. Cada mensaje y respuesta es un
-objeto JSON terminado en salto de línea (`\n`). TCP puede fragmentar un mensaje;
-el servidor acumula sus bytes hasta recibir el delimitador. Después de responder
-cierra la conexión; los mensajes adicionales de esa conexión no se procesan.
+El servidor procesa mensajes JSON terminados en salto de línea (`\n`) sobre una
+conexión TCP. TCP puede fragmentar un mensaje; el servidor acumula sus bytes
+hasta recibir el delimitador. Una misma conexión puede transportar varias
+solicitudes secuenciales: cada mensaje completo se atiende en orden FIFO y la
+conexión permanece abierta mientras el flujo esté sincronizado. Un rechazo de
+protocolo responde con su código y cierra la conexión; una conexión inactiva más
+de tres segundos se cierra con `REQUEST_TIMEOUT`.
 
 ## Solicitud de diagnóstico
 
@@ -41,7 +44,7 @@ valores numéricos, incluidos enteros JSON mayores que un entero de C++.
 | Operación de trabajos sin autorización (`submit`, `query`, `list`, `cancel`) | `UNAUTHORIZED` |
 | Mensaje mayor de 16 384 bytes, sin contar el delimitador | `MESSAGE_TOO_LARGE` |
 | Fin del flujo de entrada antes del delimitador | `INCOMPLETE_MESSAGE` |
-| No se completa el mensaje en tres segundos desde la aceptación | `REQUEST_TIMEOUT` |
+| No se completa el mensaje en tres segundos de inactividad (el plazo se reanuda con cada fragmento) | `REQUEST_TIMEOUT` |
 
 Ejemplo:
 
@@ -53,11 +56,18 @@ Ejemplo:
 
 Los sockets son no bloqueantes y se atienden mediante `poll()`. Se admiten hasta
 32 clientes activos, independientemente de la concurrencia del scheduler. Las
-conexiones excedentes se cierran. La lectura tiene un plazo absoluto de tres
-segundos: enviar bytes lentamente no lo extiende. La respuesta dispone de otros
+conexiones excedentes se cierran. La lectura tiene un plazo de tres segundos de
+inactividad: se reanuda con cada fragmento recibido y con cada respuesta
+entregada, así que enviar bytes lentamente no lo extiende, pero un mensaje
+fragmentado que avanza tampoco se corta a mitad. La respuesta dispone de otros
 tres segundos para enviarse; las escrituras parciales se completan mientras
 quede plazo. El almacenamiento de entrada está acotado al límite del mensaje
-más un bloque de lectura de 4096 bytes.
+más un bloque de lectura de 4096 bytes, y el límite se evalúa por mensaje, no
+por el total acumulado en la conexión.
+
+Un fin de flujo con el delimitador ya consumido y ninguna respuesta pendiente es
+un cierre normal y no produce sobre de error. Si quedaron bytes sin delimitador,
+el servidor responde `INCOMPLETE_MESSAGE` antes de cerrar.
 
 Un error de lectura, escritura o desconexión cierra únicamente el cliente
 correspondiente. `MSG_NOSIGNAL` evita terminar el proceso por escribir sobre una
@@ -92,11 +102,14 @@ primera para confirmar que el servicio continúa disponible.
 ## Verificación automatizada
 
 ```sh
-make -C src/hermes
-python3 src/hermes/tests/network_invalid.py
+make -C src/hermes hermes
+bash verif/scripts/TC-030.sh   # RF-22: conexión, fragmentos y desconexión
+bash verif/scripts/TC-049.sh   # RNF-24: mensaje fragmentado más de 3 s
+bash verif/scripts/TC-052.sh   # RNF-24: cierre ordenado frente a mensaje truncado
 ```
 
-La prueba utiliza HOME y configuración temporales. Cubre las validaciones de
-mensajes, límites de tamaño y profundidad, recepción fragmentada, múltiples
-mensajes, cliente lento concurrente, fin de entrada, desconexiones abruptas,
-recuperación posterior, cierre con SIGTERM y rechazo de origen por RF-20.
+Los scripts usan `HOME` y configuración temporales. La batería de red
+(`TC-030`…`TC-056`) cubre las validaciones de mensajes, límites de tamaño y
+profundidad, recepción fragmentada, varias solicitudes por conexión, cliente
+lento concurrente, fin de entrada, desconexiones abruptas, recuperación
+posterior, cierre con SIGTERM y rechazo de origen por RF-20.

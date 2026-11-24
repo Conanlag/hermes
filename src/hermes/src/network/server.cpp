@@ -181,8 +181,16 @@ int iniciarServidorRed() {
             std::size_t enviado = 0;
             Reloj::time_point limite;
             bool cerrado = false;
+            // RNF-24: la respuesta se entrega y la conexión se cierra; un
+            // rechazo de framing o de validación sí cierra el descriptor.
+            bool cerrarTrasEnviar = false;
+            // RNF-24: bytes de la transacción en curso. Se mide aquí y no con
+            // `entrada.size()` porque los bytes ya consumidos se descartan y
+            // RF-28 debe documentar igual el desenlace de la última solicitud.
+            std::size_t bytesSolicitud = 0;
             Motivo motivo = Motivo::CierreNormal;
-            // RF-28: desenlace de la solicitud atendida en esta conexión.
+            // RF-28: desenlace de la solicitud en curso o de la última
+            // atendida en esta conexión.
             DetalleSolicitud detalle;
         };
         std::vector<std::unique_ptr<Cliente>> clientes;
@@ -243,7 +251,9 @@ int iniciarServidorRed() {
                     // "Mensaje rechazado"; no se duplica aquí.
                     if (cliente.detalle.formatoInvalido) return;
                     if (cliente.motivo == Motivo::CierreNormal) return;
-                    const auto bytes = cliente.entrada.size();
+                    // RNF-24: los bytes se cuentan por transacción; el búfer
+                    // descarta lo ya consumido.
+                    const auto bytes = cliente.bytesSolicitud;
                     if (!cliente.detalle.procesada && bytes == 0) {
                         if (!avisoPermitido(cliente.motivo)) return;
                         (void)EventLog::log_event_system(EventLevel::WARN, "Cliente desconectado", {
@@ -271,6 +281,126 @@ int iniciarServidorRed() {
                     // El registro nunca puede tumbar el hilo de red.
                 }
             };
+            // RNF-24: atiende todas las solicitudes completas que ya estén en
+            // `entrada`, en orden FIFO y de una en una: mientras haya una
+            // respuesta pendiente no se consume el mensaje siguiente, lo que
+            // impide que una ráfaga encolada desborde la memoria.
+            auto atenderPendientes = [&](Cliente& cliente) {
+                bool progreso = false;
+                while (!cliente.cerrado && cliente.salida.empty()) {
+                    const auto fin = cliente.entrada.find('\n');
+                    if (fin == std::string::npos) {
+                        // Mensaje incompleto: solo es un error si ya superó el
+                        // tope sin delimitador (RNF-14).
+                        if (cliente.entrada.size() <= static_cast<std::size_t>(MAX_MENSAJE_RED))
+                            break;
+                        cliente.detalle.procesada = true;
+                        cliente.detalle.formatoInvalido = true;
+                        cliente.detalle.error = "MESSAGE_TOO_LARGE";
+                        registrarRechazo(cliente, cliente.bytesSolicitud);
+                        responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
+                        cliente.cerrarTrasEnviar = true;
+                        cliente.entrada.clear();
+                        progreso = true;
+                        break;
+                    }
+                    // RNF-24: el límite se aplica al mensaje, no al búfer: un
+                    // flujo con varias solicitudes encadenadas puede superar
+                    // el tope en total sin que ninguna lo supere por separado.
+                    if (static_cast<std::size_t>(fin) > static_cast<std::size_t>(MAX_MENSAJE_RED)) {
+                        cliente.detalle.procesada = true;
+                        cliente.detalle.formatoInvalido = true;
+                        cliente.detalle.error = "MESSAGE_TOO_LARGE";
+                        registrarRechazo(cliente, cliente.bytesSolicitud);
+                        responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
+                        cliente.cerrarTrasEnviar = true;
+                        cliente.entrada.clear();
+                        progreso = true;
+                        break;
+                    }
+                    DetalleSolicitud detalle;
+                    auto respuesta = procesarSolicitudRedDetallada(
+                        cliente.entrada.substr(0, fin), cliente.identidad,
+                        cliente.permisos, detalle);
+                    // Consumido el mensaje, los bytes posteriores al delimitador
+                    // siguen en `entrada` para la siguiente solicitud.
+                    cliente.entrada.erase(0, fin + 1);
+                    cliente.detalle = std::move(detalle);
+                    // RNF-14: un rechazo se documenta y cierra la conexión para
+                    // que el flujo no quede desincronizado.
+                    const bool rechazada = cliente.detalle.formatoInvalido;
+                    if (rechazada) registrarRechazo(cliente, cliente.bytesSolicitud);
+                    responder(cliente, std::move(respuesta));
+                    cliente.cerrarTrasEnviar = rechazada;
+                    // Los bytes posteriores al delimitador pertenecen a la
+                    // solicitud siguiente: su transacción empieza aquí y no
+                    // hereda el desenlace de la anterior. En un rechazo no
+                    // importa, porque la conexión se cierra.
+                    if (!rechazada && !cliente.entrada.empty()) {
+                        cliente.detalle = DetalleSolicitud{};
+                        cliente.bytesSolicitud = cliente.entrada.size();
+                    }
+                    progreso = true;
+                }
+                return progreso;
+            };
+            auto leer = [&](Cliente& cliente, bool errorTerminal) {
+                char buffer[4096];
+                const auto leidos = recv(cliente.socket.valor, buffer, sizeof(buffer), 0);
+                if (leidos > 0) {
+                    // RNF-24: una transacción empieza cuando el búfer está
+                    // vacío; así RF-28 no mezcla el desenlace de dos solicitudes.
+                    if (cliente.entrada.empty()) cliente.detalle = DetalleSolicitud{};
+                    cliente.entrada.append(buffer, static_cast<std::size_t>(leidos));
+                    cliente.bytesSolicitud = cliente.entrada.size();
+                    // RNF-24: el plazo protege la inactividad, no el tiempo
+                    // total desde `accept`. Un mensaje fragmentado que avanza
+                    // nunca se corta a mitad.
+                    cliente.limite = Reloj::now() + std::chrono::seconds(3);
+                    return true;
+                }
+                if (leidos == 0) {
+                    // RNF-24: FIN con el flujo sincronizado es un cierre normal.
+                    // Un cliente que terminó su solicitud y se despide no
+                    // produce INCOMPLETE_MESSAGE ni un cierre anómalo.
+                    if (cliente.entrada.empty() && cliente.detalle.procesada) {
+                        cliente.cerrado = true;
+                        return false;
+                    }
+                    despedida(cliente, "INCOMPLETE_MESSAGE", Motivo::FinSinMensaje);
+                    return false;
+                }
+                if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+                    cliente.motivo = errorTerminal ? Motivo::ErrorSocket : Motivo::ErrorLectura;
+                    cliente.cerrado = true;
+                }
+                return false;
+            };
+            auto escribir = [&](Cliente& cliente) {
+                const auto enviados = send(cliente.socket.valor,
+                    cliente.salida.data() + cliente.enviado,
+                    cliente.salida.size() - cliente.enviado, MSG_NOSIGNAL);
+                if (enviados <= 0) {
+                    if (enviados < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
+                        return false;
+                    cliente.motivo = Motivo::ErrorEscritura;
+                    cliente.cerrado = true;
+                    return false;
+                }
+                cliente.enviado += static_cast<std::size_t>(enviados);
+                if (cliente.enviado < cliente.salida.size()) return false;
+                // RNF-24: respuesta entregada. Un rechazo cierra; una solicitud
+                // aceptada deja la conexión lista para la siguiente.
+                if (cliente.cerrarTrasEnviar) {
+                    cliente.cerrado = true;
+                    return true;
+                }
+                cliente.salida.clear();
+                cliente.enviado = 0;
+                cliente.esperado = POLLIN;
+                cliente.limite = Reloj::now() + std::chrono::seconds(3);
+                return true;
+            };
             for (std::size_t i = 0; i < clientes.size(); ++i) {
                 auto& cliente = *clientes[i];
                 const auto evento = eventos[i + 1].revents;
@@ -279,66 +409,36 @@ int iniciarServidorRed() {
                 try {
                     const bool errorTerminal = (evento & (POLLERR | POLLNVAL)) != 0;
                     const bool colgado = (evento & POLLHUP) != 0;
-                    // RF-28: los bytes que llegaron antes del corte se atienden
-                    // primero. Clasificar el cierre antes de leer perdía el
-                    // desenlace de solicitudes ya completas (RST tras enviar).
-                    if (cliente.salida.empty() &&
-                        (evento & (cliente.esperado | POLLHUP | POLLERR))) {
-                        char buffer[4096];
-                        const auto leidos = recv(cliente.socket.valor, buffer, sizeof(buffer), 0);
-                        if (leidos > 0) {
-                            cliente.entrada.append(buffer, static_cast<std::size_t>(leidos));
-                            const auto fin = cliente.entrada.find('\n');
-                            if ((fin == std::string::npos && cliente.entrada.size() > MAX_MENSAJE_RED) ||
-                                (fin != std::string::npos && fin > MAX_MENSAJE_RED)) {
-                                cliente.detalle.procesada = true;
-                                cliente.detalle.formatoInvalido = true;
-                                cliente.detalle.error = "MESSAGE_TOO_LARGE";
-                                registrarRechazo(cliente,
-                                    static_cast<unsigned>(cliente.entrada.size()));
-                                responder(cliente, errorProtocolo("MESSAGE_TOO_LARGE"));
-                            } else if (fin != std::string::npos) {
-                                // Un mensaje por conexión: los bytes posteriores
-                                // al primer '\n' se descartan con la conexión.
-                                DetalleSolicitud detalle;
-                                auto respuesta = procesarSolicitudRedDetallada(
-                                    cliente.entrada.substr(0, fin), cliente.identidad,
-                                    cliente.permisos, detalle);
-                                cliente.detalle = std::move(detalle);
-                                if (cliente.detalle.formatoInvalido)
-                                    registrarRechazo(cliente,
-                                        static_cast<unsigned>(cliente.entrada.size()));
-                                responder(cliente, std::move(respuesta));
+                    // RNF-24: una conexión puede atender varias solicitudes
+                    // seguidas. El bucle alterna lectura, atención y escritura
+                    // mientras haya progreso inmediato; los bytes que llegan
+                    // encadenados se consumen sin volver a esperar a poll.
+                    bool leido = false;
+                    bool avanzar = true;
+                    while (avanzar && !cliente.cerrado) {
+                        avanzar = false;
+                        if (cliente.salida.empty()) {
+                            // RF-28: los bytes que llegaron antes del corte se
+                            // atienden primero. Clasificar el cierre antes de
+                            // leer perdía el desenlace de solicitudes ya
+                            // completas (RST tras enviar).
+                            if (!leido && (evento & (cliente.esperado | POLLHUP | POLLERR))) {
+                                leido = true;
+                                avanzar = leer(cliente, errorTerminal);
                             }
-                        } else if (leidos == 0) {
-                            despedida(cliente, "INCOMPLETE_MESSAGE", Motivo::FinSinMensaje);
-                        } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
-                            cliente.motivo = errorTerminal ? Motivo::ErrorSocket : Motivo::ErrorLectura;
-                            cliente.cerrado = true;
+                            if (!cliente.cerrado && atenderPendientes(cliente)) avanzar = true;
+                        } else if (evento & cliente.esperado) {
+                            avanzar = escribir(cliente);
                         }
                     }
                     if (!cliente.cerrado && errorTerminal) {
                         cliente.motivo = Motivo::ErrorSocket;
                         cliente.cerrado = true;
-                        continue;
                     }
                     // Hang up con respuesta pendiente: ya no hay par que lea.
                     if (!cliente.cerrado && colgado && !cliente.salida.empty()) {
                         cliente.motivo = Motivo::ErrorEscritura;
                         cliente.cerrado = true;
-                        continue;
-                    }
-                    if (!cliente.cerrado && !cliente.salida.empty() && (evento & cliente.esperado)) {
-                        const auto enviados = send(cliente.socket.valor,
-                            cliente.salida.data() + cliente.enviado,
-                            cliente.salida.size() - cliente.enviado, MSG_NOSIGNAL);
-                        if (enviados > 0) {
-                            cliente.enviado += static_cast<std::size_t>(enviados);
-                            if (cliente.enviado == cliente.salida.size()) cliente.cerrado = true;
-                        } else if (enviados == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
-                            cliente.motivo = Motivo::ErrorEscritura;
-                            cliente.cerrado = true;
-                        }
                     }
                     if (!cliente.cerrado && Reloj::now() >= cliente.limite) {
                         if (cliente.salida.empty())
@@ -405,6 +505,9 @@ int iniciarServidorRed() {
                 clientes.push_back(std::move(cliente));
             }
         }
+        EventLog::log_event_system(EventLevel::INFO, "Hermes Red detenido", {
+            {"puerto", config.puerto}
+        });
         std::cout << "Hermes Red detenido" << std::endl;
         return 0;
     } catch (const std::exception& e) {

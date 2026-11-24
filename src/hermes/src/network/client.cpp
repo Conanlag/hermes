@@ -24,6 +24,11 @@ struct Socket {
     int fd = -1;
     ~Socket() { if (fd >= 0) close(fd); }
 };
+// RNF-24: distingue un fallo de transporte de una respuesta inválida. Solo el
+// primero es reintentable cuando la consulta es de solo lectura.
+struct FalloConexion : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
 struct IgnorarPipe {
     struct sigaction anterior{};
     IgnorarPipe() {
@@ -37,12 +42,12 @@ struct IgnorarPipe {
 void esperar(int fd, short eventos, Reloj::time_point limite) {
     while (true) {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(limite - Reloj::now()).count();
-        if (ms <= 0) throw std::runtime_error("Tiempo de conexión o respuesta agotado");
+        if (ms <= 0) throw FalloConexion("Tiempo de conexión o respuesta agotado");
         pollfd evento{fd, eventos, 0};
         const int estado = poll(&evento, 1, static_cast<int>(ms));
         if (estado < 0 && errno == EINTR) continue;
         if (estado <= 0 || evento.revents & (POLLERR | POLLNVAL))
-            throw std::runtime_error("La conexión no está disponible");
+            throw FalloConexion("La conexión no está disponible");
         return;
     }
 }
@@ -120,22 +125,21 @@ int ejecutarClienteRed(int argc, char* argv[]) {
                 remota = "list";
             }
         } else throw std::invalid_argument(uso);
-        auto enviar = [&]() -> json {
-            // RNF-14: el límite de petición se aplica al payload sin el '\n'.
-            const auto carga = json({{"version", VERSION_PROTOCOLO}, {"request_id", id},
-                {"operation", remota}, {"params", params}}).dump();
-            if (carga.size() > MAX_MENSAJE_RED)
-                throw std::invalid_argument("Solicitud demasiado grande: excede el máximo de la red");
-            const auto solicitud = carga + '\n';
+        // RNF-24: una conexión por invocación, reutilizada mientras el CLI
+        // encadene solicitudes (paginación de `list`). Una invocación suelta
+        // envía una sola petición y cierra, como siempre.
+        IgnorarPipe ignorar;
+        Socket socket;
+        std::string residual;
+        auto conectar = [&]() {
             addrinfo pistas{};
             pistas.ai_family = AF_INET;
             pistas.ai_socktype = SOCK_STREAM;
             addrinfo* resultado = nullptr;
             const auto puerto = std::to_string(cargarConfiguracion().puerto);
             if (getaddrinfo(host.c_str(), puerto.c_str(), &pistas, &resultado) != 0)
-                throw std::runtime_error("No se pudo resolver el servidor");
+                throw FalloConexion("No se pudo resolver el servidor");
             std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> direcciones(resultado, freeaddrinfo);
-            Socket socket;
             const auto limite = Reloj::now() + std::chrono::seconds(10);
             for (auto* direccion = resultado; direccion; direccion = direccion->ai_next) {
                 char ip[INET_ADDRSTRLEN]{};
@@ -147,16 +151,21 @@ int ejecutarClienteRed(int argc, char* argv[]) {
                 bool listo = conectado == 0;
                 if (!listo && errno == EINPROGRESS) {
                     esperar(socket.fd, POLLOUT, limite);
-                    int error = 0;
-                    socklen_t longitud = sizeof(error);
-                    listo = getsockopt(socket.fd, SOL_SOCKET, SO_ERROR, &error, &longitud) == 0 && error == 0;
+                    int codigoSocket = 0;
+                    socklen_t longitud = sizeof(codigoSocket);
+                    listo = getsockopt(socket.fd, SOL_SOCKET, SO_ERROR, &codigoSocket, &longitud) == 0 && codigoSocket == 0;
                 }
-                if (listo) break;
+                if (listo) return;
                 close(socket.fd);
                 socket.fd = -1;
             }
-            if (socket.fd < 0) throw std::runtime_error("No se pudo conectar a un servidor LAN/VPN");
-            IgnorarPipe ignorar;
+            throw FalloConexion("No se pudo conectar a un servidor LAN/VPN");
+        };
+        // RNF-24: escritura completa ante escrituras parciales y lectura
+        // acumulada hasta el delimitador. `residual` conserva los bytes que
+        // lleguen más allá de la respuesta esperada.
+        auto transmitir = [&](const std::string& solicitud) {
+            const auto limite = Reloj::now() + std::chrono::seconds(10);
             std::size_t enviado = 0;
             while (enviado < solicitud.size()) {
                 const auto cantidad = send(socket.fd, solicitud.data() + enviado,
@@ -165,21 +174,50 @@ int ejecutarClienteRed(int argc, char* argv[]) {
                 else if (cantidad < 0 && errno == EINTR) continue;
                 else if (cantidad < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
                     esperar(socket.fd, POLLOUT, limite);
-                else throw std::runtime_error("No se pudo enviar la solicitud al servidor");
+                else throw FalloConexion("No se pudo enviar la solicitud al servidor");
             }
-            std::string respuesta;
-            while (respuesta.find('\n') == std::string::npos) {
+            while (residual.find('\n') == std::string::npos) {
                 char buffer[4096];
                 const auto cantidad = recv(socket.fd, buffer, sizeof(buffer), 0);
-                if (cantidad > 0) respuesta.append(buffer, static_cast<std::size_t>(cantidad));
+                if (cantidad > 0) residual.append(buffer, static_cast<std::size_t>(cantidad));
                 else if (cantidad < 0 && errno == EINTR) continue;
                 else if (cantidad < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
                     esperar(socket.fd, POLLIN, limite);
-                else throw std::runtime_error("El servidor cerró o rechazó la conexión");
-                if (respuesta.size() > MAX_RESPUESTA_RED)
+                else throw FalloConexion("El servidor cerró o rechazó la conexión");
+                if (residual.size() > MAX_RESPUESTA_RED)
                     throw std::runtime_error("Respuesta demasiado grande: excede el máximo de la red");
             }
-            const auto cuerpo = respuesta.substr(0, respuesta.find('\n'));
+            const auto fin = residual.find('\n');
+            std::string cuerpo = residual.substr(0, fin);
+            residual.erase(0, fin + 1);
+            return cuerpo;
+        };
+        const bool paginable = operacion == "filter" && tipoFiltro != "id";
+        std::size_t atendidas = 0;
+        auto enviar = [&]() -> json {
+            // RNF-14: el límite de petición se aplica al payload sin el '\n'.
+            const auto carga = json({{"version", 1}, {"request_id", id},
+                {"operation", remota}, {"params", params}}).dump();
+            if (carga.size() > MAX_MENSAJE_RED)
+                throw std::invalid_argument("Solicitud demasiado grande: excede el máximo de la red");
+            const auto solicitud = carga + '\n';
+            std::string cuerpo;
+            for (int intento = 0; ; ++intento) {
+                try {
+                    if (socket.fd < 0) conectar();
+                    cuerpo = transmitir(solicitud);
+                    ++atendidas;
+                    break;
+                } catch (const FalloConexion&) {
+                    // Solo una consulta paginada de solo lectura se reintenta,
+                    // y solo si la conexión ya había servido algo: un servidor
+                    // que cierra tras cada respuesta sigue funcionando.
+                    if (!paginable || atendidas == 0 || intento > 0) throw;
+                    close(socket.fd);
+                    socket.fd = -1;
+                    residual.clear();
+                }
+            }
             if (cuerpo.find('\0') != std::string::npos)
                 throw std::runtime_error("Respuesta inválida del servidor: contiene un byte nulo");
             json recibida;

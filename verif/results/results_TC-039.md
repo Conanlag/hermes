@@ -114,7 +114,7 @@ PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
 PASS: RNF-14 TC-039 sin fallos.
 ```
 
-## Ejecucion: 2026-11-23 02:40:03 -0600
+## Ejecucion: 2026-11-22 19:11:42 -0600
 
 ```text
 Arrancando 'hermes red start' con HOME temporal...
@@ -131,13 +131,13 @@ Arrancando 'hermes red start' con HOME temporal...
   byte nulo (repeticion) -> NUL_BYTE
 PASS V1/AC1: diez formatos invalidos rechazados con su codigo propio.
   registros 'Mensaje rechazado': 10 de 10 códigos, sin duplicados
-  ejemplo: {"context": {"bytes_recibidos": 69, "codigo": "UNKNOWN_OPERATION", "identidad": "tcp-PC-B", "ip": "127.0.0.1", "motivo": "CIERRE_NORMAL"}, "job_id": null, "level": "WARN", "message": "Mensaje rechazado", "ts": "2026-11-23 02:40:03"}
+  ejemplo: {"context": {"bytes_recibidos": 69, "codigo": "UNKNOWN_OPERATION", "identidad": "tcp-PC-B", "ip": "127.0.0.1", "motivo": "CIERRE_NORMAL"}, "job_id": null, "level": "WARN", "message": "Mensaje rechazado", "ts": "2026-11-22 19:11:42"}
 PASS V2/AC2: un evento por código, con IP, motivo y bytes recibidos.
 PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
 PASS: RNF-14 TC-039 sin fallos.
 ```
 
-## Ejecucion: 2026-11-23 03:38:24 -0600
+## Ejecucion: 2026-11-22 19:19:45 -0600
 
 ```text
 Arrancando 'hermes red start' con HOME temporal...
@@ -151,17 +151,16 @@ Arrancando 'hermes red start' con HOME temporal...
   16392 bytes            -> MESSAGE_TOO_LARGE
   request_id invalido    -> INVALID_REQUEST_ID
   operacion desconocida  -> UNKNOWN_OPERATION
-  version 2              -> UNSUPPORTED_VERSION
   byte nulo (repeticion) -> NUL_BYTE
 PASS V1/AC1: diez formatos invalidos rechazados con su codigo propio.
-  registros 'Mensaje rechazado': 11 de 10 códigos, sin duplicados
-  ejemplo: {"context": {"bytes_recibidos": 69, "codigo": "UNSUPPORTED_VERSION", "identidad": "tcp-PC-B", "ip": "127.0.0.1", "motivo": "CIERRE_NORMAL"}, "job_id": null, "level": "WARN", "message": "Mensaje rechazado", "ts": "2026-11-23 03:38:24"}
+  registros 'Mensaje rechazado': 10 de 10 códigos, sin duplicados
+  ejemplo: {"context": {"bytes_recibidos": 69, "codigo": "UNKNOWN_OPERATION", "identidad": "tcp-PC-B", "ip": "127.0.0.1", "motivo": "CIERRE_NORMAL"}, "job_id": null, "level": "WARN", "message": "Mensaje rechazado", "ts": "2026-11-22 19:19:45"}
 PASS V2/AC2: un evento por código, con IP, motivo y bytes recibidos.
 PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
 PASS: RNF-14 TC-039 sin fallos.
 ```
 
-## Ejecucion: 2026-11-23 03:39:41 -0600
+## Ejecucion: 2026-11-23 19:17:41 -0600
 
 ```text
 Arrancando 'hermes red start' con HOME temporal...
@@ -175,11 +174,10 @@ Arrancando 'hermes red start' con HOME temporal...
   16392 bytes            -> MESSAGE_TOO_LARGE
   request_id invalido    -> INVALID_REQUEST_ID
   operacion desconocida  -> UNKNOWN_OPERATION
-  version 2              -> UNSUPPORTED_VERSION
   byte nulo (repeticion) -> NUL_BYTE
-PASS V1/AC1: once formatos invalidos rechazados con su codigo propio.
-  registros 'Mensaje rechazado': 11 de 11 códigos, sin duplicados
-  ejemplo: {"context": {"bytes_recibidos": 69, "codigo": "UNSUPPORTED_VERSION", "identidad": "tcp-PC-B", "ip": "127.0.0.1", "motivo": "CIERRE_NORMAL"}, "job_id": null, "level": "WARN", "message": "Mensaje rechazado", "ts": "2026-11-23 03:39:42"}
+PASS V1/AC1: diez formatos invalidos rechazados con su codigo propio.
+  registros 'Mensaje rechazado': 10 de 10 códigos, sin duplicados
+  ejemplo: {"context": {"bytes_recibidos": 69, "codigo": "UNKNOWN_OPERATION", "identidad": "tcp-PC-B", "ip": "127.0.0.1", "motivo": "CIERRE_NORMAL"}, "job_id": null, "level": "WARN", "message": "Mensaje rechazado", "ts": "2026-11-23 19:17:41"}
 PASS V2/AC2: un evento por código, con IP, motivo y bytes recibidos.
 PASS V3/AC3: ping posterior correcto; el servicio sigue atendiendo.
 PASS: RNF-14 TC-039 sin fallos.
