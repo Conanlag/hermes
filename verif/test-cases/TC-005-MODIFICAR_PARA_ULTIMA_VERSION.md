@@ -1,5 +1,6 @@
-### TC-005: Solicitar cancelación de proceso en ejecución
+### TC-005: Cancelar en cola y ejecución 
 **Requisitos cubiertos:** RF-10
+**Métodos de verificación:** PRUEBA
 **Nivel de prueba:** Sistema - Parcial Fase 1
 
 #### 1. Fase de Diseño (Planificación)

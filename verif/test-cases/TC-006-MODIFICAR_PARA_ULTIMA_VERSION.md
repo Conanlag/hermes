@@ -1,5 +1,6 @@
 ### TC-006: Capturar stdout/stderr separados y código de salida
 **Requisitos cubiertos:** RF-11, RF-07
+**Métodos de verificación:** PRUEBA - DEMOSTRACION
 **Nivel de prueba:** Sistema - Parcial Fase 1
 
 #### 1. Fase de Diseño (Planificación)
