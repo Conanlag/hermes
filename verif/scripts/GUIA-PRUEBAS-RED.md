@@ -1016,7 +1016,10 @@ Detalles de implementación:
 
 Para dos orígenes distintos en un mismo host Linux (propiedad de Jobs por `ambito_trabajos`):
 
-- El servidor debe escuchar en `0.0.0.0`; `config.json` con `"interfaz": "0.0.0.0"`.
+- El servidor puede escuchar en `127.0.0.1`; los sockets pueden enlazar su origen
+  a `127.0.0.1` o `127.0.0.2` y conectar a ese destino. No usar `0.0.0.0`:
+  RNF-12/RNF-26 rechazan esa interfaz y aplican fallback a loopback. TC-011
+  verifica esta selección de origen sin una escucha comodín.
 - `redes_permitidas: ["127.0.0.0/8"]` y dos clientes: `127.0.0.1` y `127.0.0.2`, con
   `ambito_trabajos` distintos.
 - El segundo socket debe hacer `bind(("127.0.0.2", 0))` antes de `connect`; de lo contrario el

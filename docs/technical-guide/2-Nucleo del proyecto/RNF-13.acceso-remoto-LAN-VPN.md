@@ -24,8 +24,8 @@ El servidor sigue exigiendo una coincidencia exacta con los permisos configurado
 
 Sin configuración explícita, solo se permite loopback (`127.0.0.0/8`). Para
 habilitar LAN/VPN es necesario configurar la interfaz de escucha y autorizar los
-orígenes. Una escucha en `0.0.0.0` no amplía los espacios admitidos ni la lista de
-orígenes autorizados.
+orígenes. `0.0.0.0` no es una interfaz permitida; el cargador vuelve a loopback.
+La selección de interfaz no amplía los espacios ni los orígenes autorizados.
 
 Hermes no identifica automáticamente si una dirección pertenece a una LAN o una
 VPN. El administrador define los rangos; el servidor utiliza la dirección de
@@ -38,10 +38,17 @@ El emparejamiento y control exclusivo de clientes ejecutores siguen pendientes.
 
 ## Verificación
 
-Las pruebas de `src/hermes/tests/network_access.sh` comprueban los límites de
-los espacios privados, loopback y VPN compartida, y el rechazo de direcciones
-no autorizadas y subredes fuera de los espacios admitidos; las IP unicast
-individuales explícitas se verifican como excepciones /32.
+[TC-011](../../../verif/test-cases/TC-011.md) comprueba ocho reglas válidas
+de espacios privados/VPN y veinte listas inválidas, incluyendo prefijos,
+tipos JSON, públicos, link-local y límites del rango compartido. Verifica
+pertenencia y rechazo mediante sockets con origen loopback explícito, además
+de distinguir permiso de red y autorización de operaciones. No hay excepción
+para IP públicas /32.
+
+Ejecutar `bash verif/scripts/TC-011.sh`. Evidencia acumulada en
+`verif/results/results_TC-011.md` (PASS, 2026-11-27). La aceptación de reglas
+VPN no acredita un túnel VPN real; la prueba entre equipos LAN corresponde
+a TC-010.
 
 La exposición directa a Internet no forma parte de la demostración: [RNF-26](RNF-26-demostracion-red-privada.md)
 restringe interfaces y orígenes a redes privadas y VPN.

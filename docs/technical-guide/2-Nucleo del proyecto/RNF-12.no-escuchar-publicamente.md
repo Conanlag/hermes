@@ -6,9 +6,12 @@ Una interfaz inválida también vuelve a `127.0.0.1`; no hay fallback automátic
 a `0.0.0.0` si falla el bind. Una dirección que no pertenece al equipo o un puerto
 ocupado producen un error y código de salida 1.
 
-El comando no inicia el scheduler. Ctrl+C o SIGTERM cierran la escucha y liberan
-el puerto. Esta primera fase todavía no incluye daemonización ni los comandos
-`red status`, `red stop`, descubrimiento o conexiones persistentes.
+Con `network.json` habilitado, el comando inicia el scheduler antes de abrir
+la escucha; si está deshabilitado, solo atiende ping y no lo inicia. Ctrl+C o
+SIGTERM cierran la escucha y liberan el puerto; el scheduler se administra por
+separado. No incluye daemonización ni los comandos `red status`, `red stop`
+o descubrimiento. RNF-24 admite solicitudes secuenciales en una conexión,
+sin sesiones de identidad autenticadas.
 
 ## Configuración explícita para LAN
 
@@ -41,9 +44,12 @@ El cliente debe enviar un objeto JSON terminado en salto de línea; una solicitu
 `ping` válida recibe `pong`. Ya no se envía un diagnóstico espontáneo al conectar.
 
 ```sh
-make -C src/hermes
-python3 src/hermes/tests/network_invalid.py
+make -C src/hermes hermes
+bash verif/scripts/TC-011.sh
 ```
 
-Las pruebas usan un HOME temporal y comprueban solicitudes, continuidad del
-servicio, rechazo de origen y cierre con SIGTERM.
+[TC-011](../../../verif/test-cases/TC-011.md) utiliza HOME y XDG_CONFIG_HOME
+temporales y puertos libres propios. Comprueba escucha real con `ss`, fallback
+seguro a loopback, error de bind por puerto ocupado o interfaz no asignada,
+continuidad y cierre con SIGTERM. La evidencia se conserva en
+`verif/results/results_TC-011.md` (PASS, 2026-11-27).
