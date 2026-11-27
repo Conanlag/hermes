@@ -13,6 +13,7 @@
 #include "scheduler.h"
 #include "clean.h"
 #include "event_log.h"
+#include "health.h"
 #include "config.h"
 #include "data_paths.h"
 #include "network.h"
@@ -70,6 +71,13 @@ int main(int argc, char* argv[]) {
 
     if (comando == "--help") {
         return mostrarAyuda();
+    }
+    if (comando == "health") {
+        if (argc != 2 && !(argc == 3 && string(argv[2]) == "--json")) {
+            error("Uso: hermes health [--json]");
+            return 1;
+        }
+        return hermes::mostrarSalud(argc == 3);
     }
     if (comando == "logs") {
         if (argc != 2) {

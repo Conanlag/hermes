@@ -14,6 +14,7 @@
 #include <sys/file.h>
 #include <cstring>
 #include <cerrno>
+#include <deque>
 
 #include "data_paths.h"
 #include "timestamp.h"
@@ -451,6 +452,39 @@ bool EventLog::watch_logs() {
     std::signal(SIGINT, manejadorAnterior);
     std::cout << std::endl;
     return exito;
+}
+
+nlohmann::json EventLog::recent_errors(std::size_t limite,
+                                       std::size_t &lineasInvalidas) {
+    lineasInvalidas = 0;
+    std::ifstream archivo(rutaEventsLog());
+    if (!archivo) throw std::runtime_error("No se pudo abrir events.jsonl");
+    std::deque<nlohmann::json> errores;
+    std::string linea;
+    while (std::getline(archivo, linea)) {
+        // Un escritor puede estar completando el último evento.
+        if (archivo.eof()) break;
+        if (linea.empty()) continue;
+        auto evento = nlohmann::json::parse(linea, nullptr, false);
+        if (!evento.is_object() || !evento.contains("level") ||
+            !evento["level"].is_string()) {
+            ++lineasInvalidas;
+            continue;
+        }
+        if (evento["level"] != "ERROR" || limite == 0) continue;
+        // Solo se exponen campos de presentación y se vuelve a redactar por
+        // compatibilidad con bitácoras anteriores a RNF-15.
+        nlohmann::json seguro;
+        for (const char *campo : {"ts", "job_id", "message"}) {
+            seguro[campo] = paraRegistro(campoEvento(evento, campo, "-"), 240);
+        }
+        errores.push_back(std::move(seguro));
+        if (errores.size() > limite) errores.pop_front();
+    }
+    if (archivo.bad()) throw std::runtime_error("No se pudo leer events.jsonl");
+    auto salida = nlohmann::json::array();
+    for (auto it = errores.rbegin(); it != errores.rend(); ++it) salida.push_back(*it);
+    return salida;
 }
 
 static bool escribirLineaJsonl(const std::string &ruta, const nlohmann::json &entrada) {

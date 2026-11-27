@@ -30,6 +30,11 @@ public:
 
     static bool watch_logs();
 
+    // Últimos ERROR en orden de escritura, del más reciente al más antiguo.
+    // Omite líneas malformadas y la última línea si aún no está completa.
+    static nlohmann::json recent_errors(std::size_t limite,
+                                        std::size_t &lineasInvalidas);
+
     static std::string level_to_string(EventLevel level);
 };
 

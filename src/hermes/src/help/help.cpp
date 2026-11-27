@@ -30,7 +30,8 @@ int mostrarAyuda() {
     cout << "  red filter <host> <id|status|programa> <valor>" << endl;
     cout << "                                 Aplica los mismos filtros que en modo local" << endl;
     cout << "  red cancel <host> <id>         Solicita cancelar un trabajo remoto propio" << endl;
-    cout << "  logs                           Muestra la bitácora de eventos" << endl;
+    cout << "  health [--json]                Resume scheduler, red (direccion/puerto), trabajos y errores" << endl;
+    cout << "  logs                           Sigue eventos nuevos hasta Ctrl+C" << endl;
     cout << "  --version                      Muestra la version" << endl;
     cout << "  --help                         Muestra esta ayuda" << endl;
     cout << endl;
@@ -49,6 +50,8 @@ int mostrarAyuda() {
     cout << "  hermes configmax 3" << endl;
     cout << "  hermes configmax 5 --cola 2" << endl;
     cout << "  hermes logs" << endl;
+    cout << "  hermes health" << endl;
+    cout << "  hermes health --json" << endl;
     cout << endl;
 
     cout << "Codigos de salida: 0 exito, 1 error" << endl;

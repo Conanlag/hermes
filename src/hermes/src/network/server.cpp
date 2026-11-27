@@ -1,4 +1,5 @@
 #include "network.h"
+#include "network_status.h"
 #include "config.h"
 #include "network_access.h"
 #include "network_protocol.h"
@@ -165,6 +166,8 @@ int iniciarServidorRed() {
         if (bind(servidor.valor, reinterpret_cast<sockaddr*>(&direccion), sizeof(direccion)) == -1)
             fallo("No se pudo escuchar en la interfaz y puerto configurados");
         if (listen(servidor.valor, 10) == -1) fallo("listen");
+
+        RegistroServidorRed registro(config.interfaz, config.puerto);
 
         detener = 0;
         Senales senales;

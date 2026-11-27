@@ -422,6 +422,34 @@ De esta manera se puede crear, consultar y cancelar un Job utilizando las funcio
 
 ---
 
+# Consultar la salud de Hermes (RF-24)
+
+En el equipo que administra los trabajos, ejecuta:
+
+```bash
+hermes health
+hermes health --json
+```
+
+El resumen muestra si el scheduler está activo, cuántos trabajos tienen estado
+`RUNNING` y `QUEUED`, y los últimos 10 errores registrados, más reciente primero.
+Incluye los trabajos recibidos por red en ese equipo. Muestra por separado
+el scheduler y **Hermes Red**, indicando si `hermes red start` está activo y
+la dirección de escucha, por ejemplo `127.0.0.1:45820 (TCP)`.
+También muestra la dirección configurada para el próximo inicio, que puede
+ser distinta si cambiaste la configuración sin reiniciar el servidor.
+Si está inactivo, no informa una escucha activa. Los servidores iniciados con
+un binario anterior deben reiniciarse para que registren su estado.
+
+`hermes logs` sigue siendo útil para observar eventos nuevos en tiempo real.
+`health` muestra una consulta puntual y termina. Si una fuente falla, informa
+`NO DISPONIBLE` (o `null` en JSON) y devuelve código 1. Una consulta completa
+devuelve 0, aunque el servicio esté inactivo o haya errores históricos.
+
+Si aparecen trabajos `RUNNING` con el scheduler inactivo, sus estados requieren
+recuperación; la consulta solo avisa. Usa el comando como usuario propietario
+de la instalación, sin root.
+
 # 9. Hermes Red: PC A y PC B con WSL
 
 Para usar `equipo-a` en lugar de una IP en `red job`, `red filter` y
