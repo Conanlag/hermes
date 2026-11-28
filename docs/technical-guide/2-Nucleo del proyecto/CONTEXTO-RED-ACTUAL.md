@@ -428,7 +428,7 @@ Ubicación: `~/.config/hermes/config.json` o `$XDG_CONFIG_HOME/hermes/config.jso
 | Clave | Tipo | Rango / validación | Default |
 | --- | --- | --- | --- |
 | `interfaz` | string | IPv4 literal (`inet_pton`), sin `'\0'` (`config.cpp:16-20`) | `127.0.0.1` |
-| `puerto` | entero | `[1, 65535]` (`config.cpp:96`) | `45820` |
+| `puerto` | entero | `[1024, 65535]` (`config.cpp`, `config_update.cpp`) | `45820` |
 | `redes_permitidas` | array de strings | cada regla válida según `reglaRedValida()` | `["127.0.0.0/8"]` |
 
 Comportamiento ante configuración inválida (`config.cpp:27-131`):
