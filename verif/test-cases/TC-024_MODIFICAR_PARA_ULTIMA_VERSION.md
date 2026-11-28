@@ -1,3 +1,5 @@
+> **Ficha histórica sustituida:** la versión vigente es [TC-024.md](./TC-024.md), que incluye servidor TCP y sockets reales. El contenido siguiente corresponde a la cobertura parcial anterior a las pruebas de red.
+
 # TC-024: Liberación de recursos después de pruebas de estrés
 
 **Requisitos cubiertos:** RNF-33 (cobertura parcial)

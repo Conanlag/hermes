@@ -1,3 +1,5 @@
+> **Ficha histórica sustituida:** la versión vigente es [TC-005.md](./TC-005.md). El contenido siguiente documenta Fase 1 y no describe el scheduler ni los códigos de salida actuales.
+
 ### TC-005: Cancelar en cola y ejecución 
 **Requisitos cubiertos:** RF-10
 **Métodos de verificación:** PRUEBA
