@@ -33,24 +33,19 @@ y corresponde al *single-header* de nlohmann/json.
 La dependencia se encuentra dentro del directorio `include` del proyecto:
 
 ```text
-hermes/
-├── include/
-│   └── nlohmann/
-│       └── json.hpp
-├── src/
-│   └── hermes/
-│       ├── main.cpp
-│       ├── job.cpp
-│       ├── job.h
-│       └── ...
-├── data/
-│   └── -> $HOME/.local/share/hermes/data/
-└── Makefile
+hermes/                         # raíz del repositorio
+└── src/hermes/
+    ├── include/nlohmann/json.hpp
+    ├── src/
+    ├── data -> directorio de datos del usuario
+    ├── config -> directorio de configuración del usuario
+    ├── network -> directorio de configuración de red del usuario
+    └── Makefile
 ```
 
 Esto significa que Hermes no depende de que `nlohmann/json` esté instalado globalmente en el sistema operativo.
 
-El directorio `src/hermes/data` mostrado en el árbol es un enlace simbólico a `$HOME/.local/share/hermes/data/`, donde se mantienen `jobs.json`, `config.json`, `jobs.lock` y `scheduler.lock`.
+El directorio `src/hermes/data` mostrado en el árbol es un enlace simbólico a `$HOME/.local/share/hermes/data/`, donde se mantienen `jobs.json`, `jobs.lock` y `scheduler.lock`. La configuración actual se mantiene separada en `$XDG_CONFIG_HOME/hermes` si XDG_CONFIG_HOME es absoluto, o en `$HOME/.config/hermes`.
 
 Por lo tanto, no es necesario instalar el paquete mediante el administrador de paquetes del sistema, por ejemplo:
 
@@ -71,7 +66,15 @@ git clone <URL_DEL_REPOSITORIO>
 cd hermes
 ```
 
-La dependencia `nlohmann/json v3.12.0` ya debe encontrarse dentro del repositorio en:
+Desde la raíz del repositorio, entrar al directorio de construcción:
+
+```bash
+cd src/hermes
+```
+
+Las rutas `include/nlohmann/json.hpp`, `-Iinclude` y los comandos siguientes se interpretan desde **src/hermes**, donde está el Makefile. La dependencia ya está versionada; su ruta completa desde la raíz es `src/hermes/include/nlohmann/json.hpp`.
+
+La dependencia `nlohmann/json v3.12.0` ya debe encontrarse en:
 
 ```text
 include/nlohmann/json.hpp

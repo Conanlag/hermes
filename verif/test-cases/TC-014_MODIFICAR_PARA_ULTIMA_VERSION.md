@@ -1,3 +1,5 @@
+> **Ficha histórica sustituida:** la versión vigente es [TC-014.md](./TC-014.md). El contenido siguiente corresponde a Fase 1 y no describe el proceso de construcción y aislamiento actuales.
+
 ### TC-014: Construcción reproducible desde clon limpio
 **Requisitos cubiertos:** RNF-01, RNF-02, RNF-03
 **Nivel de prueba:** Aceptación - Fase 1

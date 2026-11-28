@@ -42,7 +42,7 @@ cd src/hermes/
 ```bash
 make
 ```
-*(Nota: Este comando buscará el archivo `Makefile` en esa carpeta y automatizará el ensamblaje de los diferentes módulos, generando un archivo binario/ejecutable)*
+Este comando compila con g++ y C++17, enlaza pthread y genera `src/hermes/hermes`. La dependencia nlohmann/json 3.12.0 está incluida en `src/hermes/include/nlohmann/json.hpp`; no requiere instalar paquetes JSON ni descargar archivos durante la construcción. Después, make ejecuta el arranque sin argumentos para crear archivos faltantes y adaptar los enlaces de desarrollo `data`, `config` y `network` al usuario actual. No inicia el scheduler ni el servidor TCP. Para compilar sin ese arranque, usar `make hermes`.
 
 ## Paso 4: Instalación y Ejecución Global
 
@@ -53,7 +53,7 @@ Desde la misma carpeta `src/hermes/`, ejecuta:
 ```bash
 make install
 ```
-*(Nota:Al ejecutar este comando, el `Makefile` realiza dos acciones de forma automática: primero asegura que el directorio de destino exista usando `mkdir -p ~/.local/bin`, y luego copia el archivo ejecutable `hermes` recién compilado a esa ubicación)*
+Ejecutar como usuario normal, sin sudo. El objetivo asegura la compilación, ejecuta el arranque de inicialización y copia el binario a `$HOME/.local/bin/hermes`. La configuración general se resuelve en `$XDG_CONFIG_HOME/hermes` si XDG_CONFIG_HOME es absoluto, o en `$HOME/.config/hermes`; datos y permisos de red usan las rutas de usuario documentadas. No instalar como root.
 
 ### 4.2 Configurar el PATH
 Para que tu terminal reconozca el comando `hermes` globalmente, necesitamos decirle al sistema dónde buscarlo. 
@@ -69,3 +69,22 @@ Listo. Ahora tu sistema reconoce la aplicación como un comando nativo. Para ver
 ```bash
 hermes --version
 ```
+
+
+## Comprobación desde clon limpio
+
+Con las herramientas ya instaladas, ejecutar desde la raíz:
+
+```bash
+bash verif/scripts/TC-014.sh
+```
+
+[TC-014](../../../verif/test-cases/TC-014.md) crea dos clones temporales del mismo commit local, construye en ambos y comprueba humo local/TCP, instalación y desinstalación sin privilegios. Aísla HOME/XDG para no cambiar la instalación o configuración del operador. Python 3 y ss se usan solo en el ejecutor de pruebas; en Debian/Ubuntu corresponden a los paquetes python3 e iproute2. Los cambios del origen sin commit no forman parte de la versión probada.
+
+Para retirar una instalación de usuario, desde src/hermes:
+
+```bash
+make uninstall
+```
+
+Esto elimina el ejecutable de `$HOME/.local/bin`, conservando datos y configuración.
